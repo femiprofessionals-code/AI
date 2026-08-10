@@ -1,0 +1,832 @@
+<title>Ukeme Falade 60th — East Asia &amp; the Pacific, Aug 2026</title>
+
+<style>
+__FONTS__
+
+  :root{
+    --sea-0:#062A33;
+    --sea-1:#0D4A58;
+    --sea-2:#14606F;
+    --sea-line:rgba(246,231,207,.15);
+    --cream:#F4E4CB;
+    --cream-hi:#FCF3E3;
+    --cream-sink:#EBD6B8;
+    --brass:#E9A23B;
+    --coral:#E0654C;
+    --ink:#143039;
+    --ink-soft:#5C7379;
+    --ink-faint:#96A5A9;
+    --rule:rgba(20,48,57,.12);
+    --on-sea:#F6E7CF;
+    --on-sea-soft:rgba(246,231,207,.58);
+
+    --display:"Bodoni Moda","Bodoni 72",Didot,Georgia,"Times New Roman",serif;
+    --body:"Avenir Next",Avenir,"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,sans-serif;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,"DejaVu Sans Mono",monospace;
+
+    --pad:20px;
+    --ease:cubic-bezier(.22,.61,.36,1);
+  }
+
+  *{box-sizing:border-box}
+
+  body{
+    margin:0;
+    background:var(--sea-1);
+    color:var(--on-sea);
+    font-family:var(--body);
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+    overflow-x:hidden;
+  }
+
+  .page{
+    position:relative;
+    min-height:100vh;
+    background:
+      radial-gradient(120% 68% at 80% 2%, rgba(233,162,59,.15) 0%, rgba(233,162,59,0) 55%),
+      radial-gradient(100% 55% at 6% 98%, rgba(20,96,111,.7) 0%, rgba(20,96,111,0) 62%),
+      linear-gradient(178deg, var(--sea-2) 0%, var(--sea-1) 36%, var(--sea-0) 100%);
+  }
+
+  .wrap{max-width:560px;margin:0 auto;padding:0 var(--pad)}
+
+  /* ================= hero ================= */
+  .hero{padding:46px 0 22px;text-align:center}
+
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:9.5px;letter-spacing:.32em;text-transform:uppercase;
+    color:var(--on-sea-soft);
+    display:flex;align-items:center;justify-content:center;gap:12px;
+  }
+  .eyebrow::before,.eyebrow::after{content:"";height:1px;width:26px;background:var(--sea-line)}
+
+  .wordmark{
+    font-family:var(--display);
+    font-weight:400;
+    font-size:clamp(2.5rem,12.5vw,3.7rem);
+    line-height:.94;
+    margin:16px 0 0;
+    letter-spacing:.004em;
+  }
+  .wordmark span{display:block}
+  .wordmark .lo{
+    font-style:italic;font-size:.66em;letter-spacing:.012em;color:var(--brass);
+    margin-top:.08em;
+  }
+
+  .year{
+    display:flex;align-items:center;justify-content:center;gap:13px;
+    margin-top:16px;
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.3em;text-transform:uppercase;
+    color:var(--on-sea-soft);
+  }
+  .year::before,.year::after{
+    content:"";height:1px;flex:1;max-width:44px;
+    background:linear-gradient(90deg,transparent,var(--sea-line),transparent);
+  }
+
+  .lede{
+    margin:20px auto 0;max-width:34ch;
+    font-family:var(--display);font-style:italic;
+    font-size:1.04rem;line-height:1.5;
+    color:rgba(246,231,207,.84);
+    text-wrap:balance;
+  }
+
+  .countries{
+    margin-top:18px;
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.26em;text-transform:uppercase;
+    color:var(--brass);
+  }
+
+  .stats{
+    margin-top:26px;
+    display:grid;grid-template-columns:repeat(4,1fr);
+    border-top:1px solid var(--sea-line);
+    border-bottom:1px solid var(--sea-line);
+  }
+  .stat{padding:13px 4px;text-align:center;position:relative}
+  .stat + .stat::before{content:"";position:absolute;left:0;top:22%;height:56%;width:1px;background:var(--sea-line)}
+  .stat b{
+    display:block;font-family:var(--display);font-weight:400;font-size:1.55rem;line-height:1;
+    font-variant-numeric:tabular-nums;
+  }
+  .stat i{
+    display:block;margin-top:7px;font-style:normal;
+    font-family:var(--mono);font-size:8.5px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--on-sea-soft);
+  }
+
+  /* ================= layout ================= */
+  .layout{display:block}
+  .col-chart{display:contents}
+
+  /* ================= chart ================= */
+  .chartblock{margin-top:26px}
+
+  .chart{
+    position:relative;
+    border:1px solid var(--sea-line);
+    border-radius:14px;
+    background:
+      radial-gradient(80% 60% at 50% 42%, rgba(20,96,111,.5), transparent 74%),
+      linear-gradient(158deg, rgba(6,42,51,.32), rgba(6,42,51,.68));
+    overflow:hidden;
+  }
+  .chart svg{display:block;width:100%;height:auto}
+
+  .chart-cap{
+    margin:13px 0 0;text-align:center;
+    font-family:var(--mono);font-size:9px;letter-spacing:.28em;text-transform:uppercase;
+    color:var(--on-sea-soft);
+  }
+
+  .port-hit{cursor:pointer}
+  .port-hit:focus{outline:none}
+  .port-hit:focus-visible .port-disc{stroke:var(--cream);stroke-width:2.5}
+
+  .port-disc{fill:#0B4150;stroke:var(--brass);stroke-width:1.4;transition:fill .45s var(--ease),stroke .45s var(--ease)}
+  .port-num{
+    font-family:var(--mono);font-size:10px;font-weight:600;
+    fill:var(--brass);text-anchor:middle;transition:fill .45s var(--ease);
+  }
+  .port-name{
+    font-family:var(--body);font-size:10.5px;font-weight:600;letter-spacing:.012em;
+    fill:rgba(246,231,207,.7);transition:fill .45s var(--ease);
+  }
+  .port-halo{fill:none;stroke:var(--brass);stroke-width:1;opacity:0;transform-box:fill-box;transform-origin:center}
+
+  .port-hit.on .port-disc{fill:var(--brass);stroke:var(--brass)}
+  .port-hit.on .port-num{fill:#062A33}
+  .port-hit.on .port-name{fill:var(--cream)}
+  .port-hit.on .port-halo{animation:ping 2.8s var(--ease) infinite}
+  @keyframes ping{
+    0%{opacity:.5;transform:scale(1)}
+    70%,100%{opacity:0;transform:scale(2)}
+  }
+
+  .home-disc{fill:var(--cream);stroke:none}
+  .home-ring{fill:none;stroke:rgba(246,231,207,.4);stroke-width:1}
+
+  .orbit{
+    fill:none;stroke:rgba(246,231,207,.5);stroke-width:1.3;
+    stroke-dasharray:var(--len);stroke-dashoffset:var(--len);
+  }
+  .ready .orbit{animation:draw 2s var(--ease) forwards}
+  @keyframes draw{to{stroke-dashoffset:0}}
+
+  .second{
+    fill:none;stroke:rgba(246,231,207,.5);stroke-width:1.3;
+    stroke-dasharray:2.5 4.5;opacity:0;
+  }
+  .ready .second{animation:fadein .8s 1.3s var(--ease) forwards}
+  @keyframes fadein{to{opacity:.55}}
+
+  .tick{fill:none;stroke:rgba(246,231,207,.5);stroke-width:1.2}
+  .tick-label{font-family:var(--mono);font-size:8px;letter-spacing:.12em;fill:rgba(246,231,207,.42)}
+  .chart-label{font-family:var(--mono);font-size:7.5px;letter-spacing:.26em;fill:rgba(246,231,207,.34)}
+  .key-line{stroke:rgba(246,231,207,.45);stroke-width:1.3;stroke-linecap:round}
+  .key-line.d{stroke-dasharray:2.5 4.5}
+
+  /* ================= two departures ================= */
+  .groups{
+    margin-top:16px;padding:15px 16px;
+    border:1px solid var(--sea-line);border-radius:12px;
+    background:rgba(6,42,51,.34);
+  }
+  .groups h3{
+    margin:0;font-weight:400;
+    font-family:var(--mono);font-size:8.5px;letter-spacing:.26em;text-transform:uppercase;
+    color:var(--brass);
+  }
+  .g-list{margin-top:12px;display:grid;gap:11px}
+  .g{display:grid;grid-template-columns:auto 1fr;gap:0 11px;align-items:start}
+  .g .tag{
+    font-family:var(--mono);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--on-sea-soft);
+    border:1px solid var(--sea-line);border-radius:4px;padding:4px 7px;
+    white-space:nowrap;
+  }
+  .g .txt{font-size:12.5px;line-height:1.5;color:rgba(246,231,207,.76);text-wrap:pretty}
+
+  /* ================= city rail ================= */
+  .rail-wrap{
+    position:sticky;top:0;z-index:20;
+    margin-top:18px;padding:11px 0;
+    background:rgba(11,65,78,.74);
+    -webkit-backdrop-filter:blur(14px) saturate(1.3);
+    backdrop-filter:blur(14px) saturate(1.3);
+    border-bottom:1px solid rgba(246,231,207,.08);
+  }
+  .rail{
+    display:flex;gap:8px;
+    overflow-x:auto;
+    padding:2px var(--pad);margin:0 calc(var(--pad) * -1);
+    scrollbar-width:none;-webkit-overflow-scrolling:touch;
+  }
+  .rail::-webkit-scrollbar{display:none}
+
+  .pill{
+    flex:0 0 auto;
+    display:inline-flex;align-items:center;gap:7px;
+    padding:9px 15px 9px 12px;
+    border-radius:999px;
+    border:1px solid rgba(246,231,207,.24);
+    background:transparent;color:rgba(246,231,207,.8);
+    font-family:var(--body);font-size:13.5px;font-weight:600;
+    white-space:nowrap;cursor:pointer;
+    transition:background .35s var(--ease),color .35s var(--ease),border-color .35s var(--ease);
+  }
+  .pill em{font-style:normal;font-size:13px;line-height:1}
+  .pill:hover{border-color:rgba(246,231,207,.48)}
+  .pill:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
+  .pill.on{background:var(--cream-hi);border-color:var(--cream-hi);color:var(--ink)}
+
+  /* ================= leg card ================= */
+  .stage{padding:18px 0 0}
+
+  .card{
+    background:linear-gradient(172deg,var(--cream-hi),var(--cream) 64%);
+    color:var(--ink);
+    border-radius:16px;
+    padding:22px 18px 10px;
+    box-shadow:0 20px 46px -20px rgba(3,26,32,.8),0 1px 0 rgba(255,255,255,.5) inset;
+  }
+  .card.swap{animation:rise .5s var(--ease) both}
+  @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+
+  .card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+  .glyph{
+    width:36px;height:36px;flex:0 0 auto;
+    display:grid;place-items:center;font-size:19px;line-height:1;
+    border-radius:11px;
+    background:rgba(233,162,59,.15);
+    box-shadow:0 0 0 1px rgba(233,162,59,.26) inset;
+  }
+  .dates{text-align:right}
+  .dates .span{
+    font-family:var(--mono);font-size:11px;letter-spacing:.09em;
+    color:var(--ink-soft);font-variant-numeric:tabular-nums;white-space:nowrap;
+  }
+  .nights{
+    display:inline-block;margin-top:7px;padding:4px 11px;border-radius:999px;
+    background:var(--ink);color:var(--cream-hi);
+    font-family:var(--mono);font-size:10px;letter-spacing:.05em;
+  }
+
+  .card h2{
+    font-family:var(--display);font-weight:400;
+    font-size:clamp(1.9rem,8.6vw,2.4rem);line-height:1.02;
+    margin:15px 0 0;
+  }
+  .card h2 .flag{font-size:.5em;vertical-align:.26em;margin-left:.3em}
+
+  .place{
+    margin-top:8px;
+    font-family:var(--mono);font-size:9.5px;letter-spacing:.26em;text-transform:uppercase;
+    color:var(--ink-faint);
+  }
+
+  .stay{margin-top:16px;padding:13px 14px;border-radius:10px;background:var(--cream-sink)}
+  .stay .k{
+    font-family:var(--mono);font-size:8.5px;letter-spacing:.24em;text-transform:uppercase;
+    color:var(--ink-faint);
+  }
+  .stay .v{margin-top:5px;font-size:14.5px;font-weight:700;line-height:1.3}
+  .stay .v.tbc{color:var(--ink-faint);font-weight:500;font-style:italic}
+  .stay .addr{margin-top:4px;font-size:12.5px;line-height:1.45;color:var(--ink-soft)}
+  .stay .inout{
+    display:grid;grid-template-columns:1fr;gap:9px;
+    margin-top:11px;padding-top:10px;border-top:1px solid rgba(20,48,57,.1);
+  }
+  @media (min-width:420px){.stay .inout{grid-template-columns:1fr 1fr;gap:10px}}
+  .stay .inout .lab{
+    font-family:var(--mono);font-size:8px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-faint);
+  }
+  .stay .inout .val{
+    margin-top:3px;font-family:var(--mono);font-size:11px;color:var(--ink);
+    font-variant-numeric:tabular-nums;
+  }
+
+  .transit{
+    margin-top:15px;display:flex;gap:9px;align-items:flex-start;
+    font-size:13.5px;line-height:1.5;color:var(--ink-soft);
+  }
+  .transit .ic{flex:0 0 auto;font-size:12.5px;line-height:1.55}
+
+  .summary{
+    margin:13px 0 2px;
+    font-family:var(--display);font-style:italic;
+    font-size:1.08rem;line-height:1.45;color:var(--ink);
+    text-wrap:pretty;
+  }
+
+  .days{list-style:none;margin:16px 0 0;padding:0}
+
+  .day{
+    display:grid;grid-template-columns:26px 1fr;gap:0 11px;
+    padding:15px 0;
+    border-top:1px solid var(--rule);
+  }
+  .card.swap .day{animation:dayin .5s var(--ease) both;animation-delay:calc(var(--i) * 45ms + .1s)}
+  @keyframes dayin{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:none}}
+
+  .day .mark{grid-row:1 / span 3;font-size:15px;line-height:1.3;text-align:center}
+  .day .when{
+    font-family:var(--mono);font-size:9px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--ink-faint);padding-top:2px;
+  }
+  .day .what{margin-top:4px;font-size:16px;font-weight:700;line-height:1.24;letter-spacing:-.004em}
+  .day .detail{margin-top:4px;font-size:13.5px;line-height:1.5;color:var(--ink-soft);text-wrap:pretty}
+
+  .chip{
+    display:inline-block;margin-top:8px;
+    font-family:var(--mono);font-size:8.5px;letter-spacing:.16em;text-transform:uppercase;
+  }
+  .chip.confirmed{padding:3px 8px;border-radius:5px;background:rgba(20,48,57,.07);color:var(--ink-soft)}
+  .chip.tbc{color:var(--ink-faint)}
+  .chip.tbc::before{content:"○ "}
+
+  .day.star{
+    background:linear-gradient(92deg,rgba(233,162,59,.2),rgba(233,162,59,.04));
+    margin:0 -12px;padding-left:12px;padding-right:12px;
+    border-radius:10px;border-top-color:transparent;
+  }
+  .day.star .what{color:#8C3A21}
+
+  /* ================= notes ================= */
+  .notes{margin-top:44px}
+  .notes-head{text-align:center}
+  .notes-head .kicker{
+    font-family:var(--mono);font-size:9px;letter-spacing:.3em;text-transform:uppercase;
+    color:var(--on-sea-soft);
+  }
+  .notes-head h2{
+    font-family:var(--display);font-weight:400;font-style:italic;
+    font-size:2rem;line-height:1;margin:10px 0 0;color:var(--on-sea);
+  }
+  .note-grid{margin-top:22px;display:grid;gap:1px;background:var(--sea-line);border-radius:12px;overflow:hidden}
+  .note{background:rgba(6,42,51,.42);padding:17px 18px}
+  .note h3{
+    margin:0;font-family:var(--mono);font-size:9px;letter-spacing:.24em;text-transform:uppercase;
+    color:var(--brass);font-weight:400;
+  }
+  .note p{
+    margin:9px 0 0;font-size:13.5px;line-height:1.6;
+    color:rgba(246,231,207,.76);text-wrap:pretty;
+  }
+
+  /* ================= footer ================= */
+  .foot{padding:44px 0 60px;text-align:center}
+  .foot .rule{height:1px;margin:0 0 20px;background:linear-gradient(90deg,transparent,var(--sea-line),transparent)}
+  .foot p{
+    margin:0 auto;max-width:40ch;
+    font-family:var(--mono);font-size:9.5px;line-height:2;letter-spacing:.13em;text-transform:uppercase;
+    color:var(--on-sea-soft);
+  }
+  .foot .sig{
+    margin-top:16px;font-family:var(--display);font-style:italic;font-size:1.3rem;
+    letter-spacing:.02em;color:var(--brass);text-transform:none;
+  }
+
+  /* ================= desktop ================= */
+  @media (min-width:900px){
+    :root{--pad:40px}
+    .wrap{max-width:1120px}
+    .hero{padding:56px 0 6px}
+    .wordmark{font-size:4.4rem}
+    .lede{font-size:1.14rem;max-width:44ch;margin-top:22px}
+    .stats{max-width:600px;margin-left:auto;margin-right:auto;margin-top:28px}
+
+    .layout{
+      display:grid;
+      grid-template-columns:minmax(340px,404px) 1fr;
+      gap:0 46px;
+      align-items:start;
+      margin-top:34px;
+    }
+    .col-chart{display:block;position:sticky;top:28px}
+    .chartblock{margin-top:0}
+
+    .rail-wrap{
+      position:static;background:none;backdrop-filter:none;-webkit-backdrop-filter:none;
+      border-bottom:0;padding:16px 0 0;margin-top:14px;
+    }
+    .rail{flex-wrap:wrap;overflow:visible;margin:0;padding:0;gap:8px}
+
+    .stage{padding:0}
+    .card{padding:30px 30px 14px;border-radius:18px}
+    .card h2{font-size:2.7rem}
+    .summary{font-size:1.18rem}
+    .day{grid-template-columns:30px 1fr;gap:0 15px;padding:17px 0}
+    .day .mark{font-size:16px}
+    .day .what{font-size:17px}
+    .day .detail{font-size:14px;max-width:60ch}
+
+    .notes{margin-top:64px}
+    .notes-head h2{font-size:2.6rem}
+    .note-grid{grid-template-columns:repeat(2,1fr)}
+    .note{padding:22px 24px}
+    .foot{padding-top:56px}
+  }
+
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{
+      animation-duration:.001ms !important;
+      animation-iteration-count:1 !important;
+      transition-duration:.001ms !important;
+    }
+    .orbit{stroke-dashoffset:0}
+    .second{opacity:.55}
+  }
+</style>
+
+<div class="page">
+  <div class="wrap">
+
+    <header class="hero">
+      <div class="eyebrow">August 14 — 30, 2026</div>
+      <h1 class="wordmark"><span>Ukeme Falade</span><span class="lo">Sixtieth</span></h1>
+      <div class="year">East Asia &amp; the Pacific</div>
+      <p class="lede">Seventeen days around the world — Washington to Jakarta, Surabaya, Sydney and Bali, then home the long way through Hong&nbsp;Kong and Seoul.</p>
+      <div class="countries">Two departures · one table in Bali</div>
+      <div class="stats">
+        <div class="stat"><b>17</b><i>Days</i></div>
+        <div class="stat"><b>7</b><i>Cities</i></div>
+        <div class="stat"><b>5</b><i>Stays</i></div>
+        <div class="stat"><b>9</b><i>Flights</i></div>
+      </div>
+    </header>
+
+    <div class="layout">
+      <div class="col-chart">
+
+        <div class="chartblock">
+          <div class="chart" id="chart">
+            <svg viewBox="0 0 400 344" role="img"
+                 aria-label="Round-the-world route: Washington, Jakarta, Surabaya, Sydney, Bali, Guangzhou and home via Hong Kong and Seoul">
+
+              <!-- main route: the circumnavigation -->
+              <circle class="orbit" id="orbit" cx="200" cy="180" r="100"/>
+
+              <!-- second departure, cutting across via Taipei -->
+              <path class="second" d="M200,80 C272,134 262,236 158,271"/>
+              <circle class="tick" cx="245" cy="183" r="3.5"/>
+              <text class="tick-label" x="253" y="186">TPE</text>
+
+              <!-- transit airports on the main route -->
+              <circle class="tick" cx="259" cy="99" r="3.5"/>
+              <text class="tick-label" x="267" y="90">AUH</text>
+              <circle class="tick" cx="275" cy="246" r="3.5"/>
+              <text class="tick-label" x="284" y="256">SIN</text>
+              <circle class="tick" cx="101" cy="168" r="3.5"/>
+              <text class="tick-label" x="93" y="166" text-anchor="end">HKG</text>
+              <circle class="tick" cx="126" cy="113" r="3.5"/>
+              <text class="tick-label" x="118" y="105" text-anchor="end">ICN</text>
+
+              <!-- home -->
+              <g>
+                <circle class="home-ring" cx="200" cy="80" r="13"/>
+                <circle class="home-disc" cx="200" cy="80" r="5.5"/>
+                <text class="port-name" x="200" y="58" text-anchor="middle" style="fill:rgba(246,231,207,.82)">Washington</text>
+                <text class="chart-label" x="200" y="46" text-anchor="middle">HOME</text>
+              </g>
+
+              <!-- stays -->
+              <g class="port-hit" data-go="jakarta" tabindex="0" role="button" aria-label="Stop 1, Jakarta">
+                <circle class="port-halo" cx="293" cy="143" r="14"/>
+                <circle class="port-disc" cx="293" cy="143" r="12"/>
+                <text class="port-num" x="293" y="147" text-anchor="middle">1</text>
+                <text class="port-name" x="313" y="147">Jakarta</text>
+              </g>
+              <g class="port-hit" data-go="surabaya" tabindex="0" role="button" aria-label="Stop 2, Surabaya">
+                <circle class="port-halo" cx="297" cy="204" r="14"/>
+                <circle class="port-disc" cx="297" cy="204" r="12"/>
+                <text class="port-num" x="297" y="208" text-anchor="middle">2</text>
+                <text class="port-name" x="317" y="208">Surabaya</text>
+              </g>
+              <g class="port-hit" data-go="sydney" tabindex="0" role="button" aria-label="Stop 3, Sydney">
+                <circle class="port-halo" cx="237" cy="273" r="14"/>
+                <circle class="port-disc" cx="237" cy="273" r="12"/>
+                <text class="port-num" x="237" y="277" text-anchor="middle">3</text>
+                <text class="port-name" x="237" y="299" text-anchor="middle">Sydney</text>
+              </g>
+              <g class="port-hit" data-go="bali" tabindex="0" role="button" aria-label="Stop 4, Bali">
+                <circle class="port-halo" cx="158" cy="271" r="14"/>
+                <circle class="port-disc" cx="158" cy="271" r="12"/>
+                <text class="port-num" x="158" y="275" text-anchor="middle">4</text>
+                <text class="port-name" x="158" y="297" text-anchor="middle">Bali</text>
+              </g>
+              <g class="port-hit" data-go="guangzhou" tabindex="0" role="button" aria-label="Stop 5, Guangzhou">
+                <circle class="port-halo" cx="107" cy="218" r="14"/>
+                <circle class="port-disc" cx="107" cy="218" r="12"/>
+                <text class="port-num" x="107" y="222" text-anchor="middle">5</text>
+                <text class="port-name" x="87" y="222" text-anchor="end">Guangzhou</text>
+              </g>
+
+              <!-- key -->
+              <g transform="translate(20,326)">
+                <line class="key-line" x1="0" y1="0" x2="16" y2="0"/>
+                <text class="chart-label" x="22" y="3">MAIN ROUTE</text>
+                <line class="key-line d" x1="104" y1="0" x2="120" y2="0"/>
+                <text class="chart-label" x="126" y="3">VIA TAIPEI</text>
+              </g>
+              <text class="chart-label" x="382" y="329" text-anchor="end">17 DAYS</text>
+            </svg>
+          </div>
+          <p class="chart-cap">Tap a city to open the leg</p>
+
+          <div class="groups">
+            <h3>Two departures</h3>
+            <div class="g-list">
+              <div class="g">
+                <span class="tag">Main</span>
+                <span class="txt">Leaves Washington Aug 14 via Abu Dhabi, then Jakarta, Surabaya and Sydney — into Bali on Aug 22.</span>
+              </div>
+              <div class="g">
+                <span class="tag">Second</span>
+                <span class="txt">Leaves Washington Aug 22 at 1:50 AM via Taipei — lands Bali Aug 23 at 3:15 PM.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="rail-wrap">
+          <div class="rail" id="rail" role="tablist" aria-label="Trip legs"></div>
+        </div>
+
+      </div>
+
+      <div class="stage"><div id="card"></div></div>
+    </div>
+
+    <section class="notes">
+      <div class="notes-head">
+        <div class="kicker">Before you go</div>
+        <h2>Travel notes</h2>
+      </div>
+      <div class="note-grid">
+        <div class="note">
+          <h3>Documents</h3>
+          <p>Passports valid 6+ months past return. Check visa and transit rules for Indonesia, Australia, Taiwan transit, mainland China (Guangzhou entry) and Hong Kong.</p>
+        </div>
+        <div class="note">
+          <h3>Weather</h3>
+          <p>Tropical heat and humidity in Indonesia and Bali; Sydney is late winter — pack layers and a warm jacket for Aug 20–22.</p>
+        </div>
+        <div class="note">
+          <h3>Money &amp; power</h3>
+          <p>Five currencies en route — rupiah, Singapore and Australian dollars, HK dollars, won. A universal adapter covers the four plug standards.</p>
+        </div>
+        <div class="note">
+          <h3>Packing</h3>
+          <p>Offline maps for each city, meds and chargers in carry-on for the long legs, one warm layer accessible for Sydney and the red-eyes.</p>
+        </div>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <div class="rule"></div>
+      <p>Washington → Jakarta → Surabaya → Sydney → Bali → Hong Kong → home</p>
+      <div class="sig">Safe travels</div>
+    </footer>
+
+  </div>
+</div>
+
+<script>
+const LEGS = [
+  {
+    id:"outbound", emoji:"✈️", name:"Outbound", flag:"",
+    place:"Washington · Abu Dhabi", span:"Fri Aug 14 — Sun Aug 16", nights:"2 days in transit",
+    stay:null,
+    transit:{ic:"🛫", text:"IAD 3:10 PM → AUH 12:15 PM, then AUH 9:25 PM → CGK 9:00 AM"},
+    summary:"Two days in the air — Washington to Abu Dhabi, an evening connection, and into Jakarta on Sunday morning.",
+    days:[
+      {when:"Fri · Aug 14", em:"✈️", what:"Washington → Abu Dhabi",
+       detail:"IAD 3:10 PM → AUH 12:15 PM · arrives Sat, Aug 15", chip:"confirmed"},
+      {when:"Sat · Aug 15", em:"🌙", what:"Abu Dhabi → Jakarta",
+       detail:"Evening connection · AUH 9:25 PM → CGK 9:00 AM, arrives Sun, Aug 16", chip:"confirmed"}
+    ]
+  },
+  {
+    id:"jakarta", emoji:"🏙️", name:"Jakarta", flag:"🇮🇩",
+    place:"Indonesia", span:"Sun Aug 16 — Mon Aug 17", nights:"1 night",
+    stay:{
+      name:"Four Seasons Hotel Jakarta",
+      addr:"Jalan Jend Gatot Subroto Kav 18, Jakarta 12710",
+      in:"Sun, Aug 16 · 3:00 PM", out:"Mon, Aug 17 · 12:00 PM"
+    },
+    transit:{ic:"🛬", text:"Land CGK 9:00 AM · check in from 3:00 PM"},
+    summary:"One night in the capital before the afternoon hop east to Surabaya.",
+    days:[
+      {when:"Sun · Aug 16", em:"🛬", what:"Arrive Jakarta",
+       detail:"Land CGK 9:00 AM · Four Seasons check-in 3:00 PM", chip:"confirmed"},
+      {when:"Mon · Aug 17", em:"🧳", what:"Check out",
+       detail:"Out by 12:00 PM · on to Halim for the afternoon flight", chip:"confirmed"}
+    ]
+  },
+  {
+    id:"surabaya", emoji:"🌏", name:"Surabaya", flag:"🇮🇩",
+    place:"East Java · Indonesia", span:"Mon Aug 17 — Wed Aug 19", nights:"2 nights",
+    stay:{
+      name:"JW Marriott Hotel Surabaya",
+      addr:"Jalan Embong Malang 85–89, Surabaya 60261",
+      in:"Mon, Aug 17 · 2:00 PM", out:"Wed, Aug 19 · before 12:00 PM"
+    },
+    transit:{ic:"✈️", text:"HLP 1:35 PM → SUB 3:00 PM · 1h 25m"},
+    summary:"Two nights in East Java, then an evening flight out through Singapore.",
+    days:[
+      {when:"Mon · Aug 17", em:"✈️", what:"Jakarta → Surabaya",
+       detail:"Halim 1:35 PM → Surabaya 3:00 PM · 1h 25m · JW Marriott from 2:00 PM", chip:"confirmed"},
+      {when:"Tue · Aug 18", em:"🌏", what:"Surabaya",
+       detail:"Full day · JW Marriott Surabaya", chip:"confirmed"},
+      {when:"Wed · Aug 19", em:"🛫", what:"Surabaya → Singapore",
+       detail:"Check out before 12:00 PM · SUB 7:15 PM → SIN 10:45 PM, 3h 30m", chip:"confirmed"}
+    ]
+  },
+  {
+    id:"sydney", emoji:"🌉", name:"Sydney", flag:"🇦🇺",
+    place:"The Rocks · Australia", span:"Thu Aug 20 — Sat Aug 22", nights:"2 nights",
+    stay:{
+      name:"Shangri-La Sydney",
+      addr:"176 Cumberland Street, The Rocks, NSW · +61 2 9250 6111",
+      in:"Thu, Aug 20 · 3:00 PM", out:"Sat, Aug 22 · 11:00 AM"
+    },
+    transit:{ic:"🛬", text:"SIN 12:45 AM → SYD 10:25 AM · 7h 40m red-eye"},
+    summary:"A late connection in Singapore, a red-eye south, and two nights over the harbour.",
+    days:[
+      {when:"Wed · Aug 19", em:"🌃", what:"Singapore",
+       detail:"Land SIN 10:45 PM · late connection through to Sydney", chip:"confirmed"},
+      {when:"Thu · Aug 20", em:"🛬", what:"Arrive Sydney",
+       detail:"SIN 12:45 AM → SYD 10:25 AM · 7h 40m red-eye · Shangri-La check-in 3:00 PM", chip:"confirmed"},
+      {when:"Fri · Aug 21", em:"🌉", what:"Sydney",
+       detail:"Full day · Shangri-La, The Rocks", chip:"confirmed"},
+      {when:"Sat · Aug 22", em:"🛫", what:"Sydney → Bali",
+       detail:"Check out 11:00 AM · SYD 5:45 PM → DPS 10:30 PM, 6h 45m", chip:"confirmed"}
+    ]
+  },
+  {
+    id:"bali", emoji:"🌺", name:"Bali", flag:"🇮🇩",
+    place:"Denpasar · Indonesia", span:"Sat Aug 22 — Thu Aug 27", nights:"5 nights",
+    stay:null,
+    transit:{ic:"🤝", text:"Both groups meet here — first lands Sat 10:30 PM, second Sun 3:15 PM"},
+    summary:"Five nights, everyone together — the two departures converge in Bali on Aug 22–23.",
+    days:[
+      {when:"Sat · Aug 22", em:"🛬", what:"First group arrives",
+       detail:"SYD 5:45 PM → DPS 10:30 PM · second group departs IAD 1:50 AM for Taipei, 15h 55m", chip:"confirmed"},
+      {when:"Sun · Aug 23", em:"🤝", what:"Second group lands — everyone together",
+       detail:"TPE 9:50 AM → DPS 3:15 PM · 5h 25m · group complete", chip:"confirmed", star:true},
+      {when:"Mon · Aug 24", em:"🌺", what:"Bali",
+       detail:"Full day, all together", chip:"confirmed"},
+      {when:"Tue · Aug 25", em:"🌺", what:"Bali",
+       detail:"Full day, all together", chip:"confirmed"},
+      {when:"Wed · Aug 26", em:"🌙", what:"Last full day",
+       detail:"Midnight departure ahead — DPS 12:40 AM on Thursday", chip:"confirmed"}
+    ]
+  },
+  {
+    id:"guangzhou", emoji:"🏮", name:"Guangzhou", flag:"🇨🇳",
+    place:"Guangdong · China", span:"Thu Aug 27 — Sun Aug 30", nights:"3 nights",
+    stay:{
+      name:"Rosewood Guangzhou",
+      addr:"Guangzhou, Guangdong · ground transfer to Hong Kong for the flight home",
+      in:"Thu, Aug 27 · from 5:55 AM", out:"Sun, Aug 30 · 12:45 AM departure"
+    },
+    transit:{ic:"🛬", text:"DPS 12:40 AM → CAN 5:55 AM · 5h 15m"},
+    summary:"Three nights in Guangzhou, then the long way home through Hong Kong and Seoul.",
+    days:[
+      {when:"Thu · Aug 27", em:"🛬", what:"Arrive Guangzhou",
+       detail:"DPS 12:40 AM → CAN 5:55 AM · 5h 15m", chip:"confirmed"},
+      {when:"Fri · Aug 28", em:"🏮", what:"Guangzhou",
+       detail:"Full day · Rosewood Guangzhou", chip:"confirmed"},
+      {when:"Sat · Aug 29", em:"🏮", what:"Guangzhou",
+       detail:"Full day · Rosewood Guangzhou", chip:"confirmed"},
+      {when:"Sun · Aug 30", em:"🏡", what:"Hong Kong → Seoul → home",
+       detail:"Ground transfer to Hong Kong · HKG 12:45 AM → ICN 4h 40m → IAD, lands 11:15 AM same day", chip:"confirmed"}
+    ]
+  }
+];
+
+const CHIP_LABEL = {confirmed:"Confirmed", tbc:"To confirm"};
+
+const rail = document.getElementById("rail");
+const cardHost = document.getElementById("card");
+const ports = [...document.querySelectorAll(".port-hit")];
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+LEGS.forEach(leg => {
+  const b = document.createElement("button");
+  b.className = "pill";
+  b.type = "button";
+  b.dataset.go = leg.id;
+  b.setAttribute("role", "tab");
+  b.innerHTML = `<em>${leg.emoji}</em>${esc(leg.name)}`;
+  rail.appendChild(b);
+});
+
+function stayBlock(leg){
+  if (!leg.stay){
+    const label = leg.id === "outbound" ? "In transit" : "Accommodation to be confirmed";
+    return `<div class="stay"><div class="k">Staying at</div><div class="v tbc">${label}</div></div>`;
+  }
+  const s = leg.stay;
+  return `<div class="stay">
+      <div class="k">Staying at</div>
+      <div class="v">${esc(s.name)}</div>
+      <div class="addr">${esc(s.addr)}</div>
+      <div class="inout">
+        <div><div class="lab">Check in</div><div class="val">${esc(s.in)}</div></div>
+        <div><div class="lab">Check out</div><div class="val">${esc(s.out)}</div></div>
+      </div>
+    </div>`;
+}
+
+function render(leg){
+  const days = leg.days.map((d, i) => `
+    <li class="day${d.star ? " star" : ""}" style="--i:${i}">
+      <span class="mark" aria-hidden="true">${d.em}</span>
+      <div class="when">${esc(d.when)}</div>
+      <div class="what">${esc(d.what)}</div>
+      <div class="detail">${esc(d.detail)}${
+        d.chip ? `<br><span class="chip ${d.chip}">${CHIP_LABEL[d.chip]}</span>` : ""
+      }</div>
+    </li>`).join("");
+
+  cardHost.innerHTML = `
+    <article class="card swap" role="tabpanel" aria-label="${esc(leg.name)}">
+      <div class="card-top">
+        <span class="glyph" aria-hidden="true">${leg.emoji}</span>
+        <div class="dates">
+          <div class="span">${esc(leg.span)}</div>
+          <div class="nights">${esc(leg.nights)}</div>
+        </div>
+      </div>
+      <h2>${esc(leg.name)}${leg.flag ? `<span class="flag" aria-hidden="true">${leg.flag}</span>` : ""}</h2>
+      <div class="place">${esc(leg.place)}</div>
+      ${stayBlock(leg)}
+      <div class="transit"><span class="ic" aria-hidden="true">${leg.transit.ic}</span><span>${esc(leg.transit.text)}</span></div>
+      <p class="summary">${esc(leg.summary)}</p>
+      <ul class="days">${days}</ul>
+    </article>`;
+}
+
+let current = null;
+
+function select(id, scroll){
+  if (id === current) return;
+  current = id;
+  render(LEGS.find(l => l.id === id));
+
+  rail.querySelectorAll(".pill").forEach(p => {
+    const on = p.dataset.go === id;
+    p.classList.toggle("on", on);
+    p.setAttribute("aria-selected", on ? "true" : "false");
+  });
+  ports.forEach(p => p.classList.toggle("on", p.dataset.go === id));
+
+  if (scroll){
+    const pill = rail.querySelector(`.pill[data-go="${id}"]`);
+    if (pill && rail.scrollWidth > rail.clientWidth){
+      rail.scrollTo({
+        left: pill.offsetLeft - (rail.clientWidth - pill.offsetWidth) / 2,
+        behavior: "smooth"
+      });
+    }
+  }
+}
+
+rail.addEventListener("click", e => {
+  const p = e.target.closest(".pill");
+  if (p) select(p.dataset.go, true);
+});
+
+ports.forEach(p => {
+  p.addEventListener("click", () => {
+    select(p.dataset.go, true);
+    if (window.matchMedia("(max-width:899px)").matches){
+      document.querySelector(".rail-wrap").scrollIntoView({behavior:"smooth", block:"start"});
+    }
+  });
+  p.addEventListener("keydown", e => {
+    if (e.key === "Enter" || e.key === " "){ e.preventDefault(); p.click(); }
+  });
+});
+
+rail.addEventListener("keydown", e => {
+  if (e.key !== "ArrowRight" && e.key !== "ArrowLeft") return;
+  const i = LEGS.findIndex(l => l.id === current);
+  const next = (i + (e.key === "ArrowRight" ? 1 : LEGS.length - 1)) % LEGS.length;
+  select(LEGS[next].id, true);
+  rail.querySelector(`.pill[data-go="${LEGS[next].id}"]`).focus();
+});
+
+const orbit = document.getElementById("orbit");
+orbit.style.setProperty("--len", orbit.getTotalLength());
+
+select("outbound", false);
+requestAnimationFrame(() => document.getElementById("chart").classList.add("ready"));
+</script>
