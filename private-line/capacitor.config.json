@@ -1,0 +1,9 @@
+{
+  "appId": "com.privateline.app",
+  "appName": "Private Line",
+  "webDir": "www",
+  "android": { "allowMixedContent": false },
+  "plugins": {
+    "PushNotifications": { "presentationOptions": ["badge", "sound", "alert"] }
+  }
+}

@@ -1,0 +1,134 @@
+name: Private Line (Android app)
+
+on:
+  push:
+    paths:
+      - 'private-line/**'
+      - '.github/workflows/private-line.yml'
+  workflow_dispatch:
+    inputs:
+      deploy_server:
+        description: 'Also upload the server part (security rules + notification functions) to Firebase'
+        type: boolean
+        default: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: private-line
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            private-line/package-lock.json
+            private-line/functions/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npm ci
+        working-directory: private-line/functions
+      - run: npm run build:www
+      - name: Two phones + intruder end to end (Firebase emulators, real rules, WebRTC calls)
+        env:
+          CHROME_PATH: /usr/bin/google-chrome
+          SHOTS: ${{ github.workspace }}/private-line/e2e-screenshots
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: private-line-screenshots
+          path: private-line/e2e-screenshots
+          if-no-files-found: ignore
+
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: private-line
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: private-line/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - name: Push notifications config (google-services.json) from secret, if set
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.PL_GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json; fi
+      - name: Build the app and copy it into the Android project
+        env:
+          FIREBASE_WEB_CONFIG: ${{ secrets.PL_FIREBASE_WEB_CONFIG }}
+        run: npm run build
+      - name: Optional signing key from secrets
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.PL_ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+          fi
+      - name: Build APK
+        working-directory: private-line/android
+        env:
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.PL_ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.PL_ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.PL_ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          if [ -n "$ANDROID_KEYSTORE_FILE" ]; then
+            ./gradlew --no-daemon assembleRelease
+            cp app/build/outputs/apk/release/app-release.apk ../Private-Line.apk
+          else
+            ./gradlew --no-daemon assembleDebug
+            cp app/build/outputs/apk/debug/app-debug.apk ../Private-Line.apk
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Private-Line-Android
+          path: private-line/Private-Line.apk
+          if-no-files-found: error
+
+  deploy-server:
+    if: github.event_name == 'workflow_dispatch' && inputs.deploy_server
+    needs: test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: private-line
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+      - run: npm ci
+        working-directory: private-line/functions
+      - name: Upload security rules and notification functions to your Firebase project
+        env:
+          SERVICE_ACCOUNT: ${{ secrets.PL_FIREBASE_SERVICE_ACCOUNT }}
+          PROJECT_ID: ${{ secrets.PL_FIREBASE_PROJECT_ID }}
+          TURN_KEY_ID: ${{ secrets.PL_TURN_KEY_ID }}
+          TURN_KEY_TOKEN: ${{ secrets.PL_TURN_KEY_TOKEN }}
+        run: |
+          if [ -z "$SERVICE_ACCOUNT" ] || [ -z "$PROJECT_ID" ]; then
+            echo "::error::Add the PL_FIREBASE_SERVICE_ACCOUNT and PL_FIREBASE_PROJECT_ID secrets first (see private-line/README.md)."; exit 1
+          fi
+          printf '%s' "$SERVICE_ACCOUNT" > "$RUNNER_TEMP/sa.json"
+          export GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json"
+          printf 'TURN_KEY_ID=%s\nTURN_KEY_TOKEN=%s\n' "$TURN_KEY_ID" "$TURN_KEY_TOKEN" > functions/.env
+          npx firebase deploy --config firebase/firebase.json --project "$PROJECT_ID" --only firestore:rules,storage,functions --force --non-interactive

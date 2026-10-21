@@ -1,0 +1,111 @@
+rules_version = '2';
+// Private Line: exactly two phones per pair.
+//
+// pairs/{pairId}: pairId = SHA-256 of the secret pair code, so the code itself is never stored
+// and a pair can only be found by someone who knows the code. Listing pairs is impossible.
+// slots.a / slots.b = { uid, name, recovery, joinedAt }. recovery = slow hash of (code + slot + PIN),
+// used only to move your slot to a replacement phone.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function pairDoc(p) {
+      return get(/databases/$(database)/documents/pairs/$(p)).data;
+    }
+    function isMemberOf(d) {
+      return request.auth != null
+        && (d.slots.a.uid == request.auth.uid || (d.slots.b != null && d.slots.b.uid == request.auth.uid));
+    }
+    function isMember(p) {
+      return isMemberOf(pairDoc(p));
+    }
+    function slotShape(s) {
+      return s.keys().hasOnly(['uid', 'name', 'recovery', 'joinedAt'])
+        && s.uid is string && s.name is string && s.name.size() > 0 && s.name.size() <= 40
+        && s.recovery is string && s.recovery.size() == 64;
+    }
+    function onlySlotsChange() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['slots']);
+    }
+    // Move slot `s` to this phone: must prove knowledge of the code + PIN (same recovery hash).
+    function replaceSlot(s, o) {
+      return resource.data.slots[s] != null
+        && request.resource.data.slots[o] == resource.data.slots[o]
+        && slotShape(request.resource.data.slots[s])
+        && request.resource.data.slots[s].uid == request.auth.uid
+        && request.resource.data.slots[s].recovery == resource.data.slots[s].recovery;
+    }
+    // A member edits their own slot (name, new PIN → new recovery hash).
+    function editOwnSlot(s, o) {
+      return resource.data.slots[s].uid == request.auth.uid
+        && request.resource.data.slots[o] == resource.data.slots[o]
+        && slotShape(request.resource.data.slots[s])
+        && request.resource.data.slots[s].uid == request.auth.uid;
+    }
+
+    match /pairs/{pairId} {
+      allow list: if false;
+      // Readable by its members, or by someone with the code while the second place is still free.
+      allow get: if request.auth != null && (resource.data.slots.b == null || isMemberOf(resource.data));
+      allow create: if request.auth != null
+        && pairId.size() == 64
+        && request.resource.data.keys().hasOnly(['slots', 'createdAt', 'v'])
+        && request.resource.data.slots.keys().hasOnly(['a', 'b'])
+        && slotShape(request.resource.data.slots.a)
+        && request.resource.data.slots.a.uid == request.auth.uid
+        && request.resource.data.slots.b == null;
+      allow update: if request.auth != null && onlySlotsChange() && (
+        // Second person joins.
+        (resource.data.slots.b == null
+          && resource.data.slots.a.uid != request.auth.uid
+          && request.resource.data.slots.a == resource.data.slots.a
+          && slotShape(request.resource.data.slots.b)
+          && request.resource.data.slots.b.uid == request.auth.uid)
+        || replaceSlot('a', 'b') || replaceSlot('b', 'a')
+        || editOwnSlot('a', 'b') || (resource.data.slots.b != null && editOwnSlot('b', 'a'))
+      );
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if isMember(pairId);
+        allow create: if isMember(pairId)
+          && request.resource.data.from == request.auth.uid
+          && request.resource.data.keys().hasOnly(['from', 'type', 'text', 'media', 'createdAt', 'clientAt', 'deliveredAt', 'readAt', 'deleted', 'replyTo'])
+          && request.resource.data.type in ['text', 'image', 'audio', 'file', 'call']
+          && (!('text' in request.resource.data) || (request.resource.data.text is string && request.resource.data.text.size() <= 10000))
+          && request.resource.data.deliveredAt == null && request.resource.data.readAt == null;
+        // The other person marks delivered/read; the sender can delete for everyone.
+        allow update: if isMember(pairId) && (
+          (resource.data.from != request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deliveredAt', 'readAt']))
+          || (resource.data.from == request.auth.uid
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['deleted', 'text', 'media'])
+            && request.resource.data.deleted == true)
+        );
+        allow delete: if false;
+      }
+
+      // Call signalling (WebRTC offer/answer and network candidates).
+      match /calls/{callId} {
+        allow read: if isMember(pairId);
+        allow create: if isMember(pairId) && request.resource.data.from == request.auth.uid;
+        allow update: if isMember(pairId) && request.resource.data.from == resource.data.from;
+        allow delete: if false;
+        match /{sub}/{doc} {
+          allow read, create: if isMember(pairId);
+        }
+      }
+
+      // Each phone's push-notification token.
+      match /devices/{uid} {
+        allow read: if isMember(pairId);
+        allow write: if request.auth != null && request.auth.uid == uid && isMember(pairId);
+      }
+    }
+
+    // Written only by the Cloud Functions in the emulator (test record of push notifications).
+    match /pushLog/{id} {
+      allow read: if request.auth != null;
+      allow write: if false;
+    }
+  }
+}

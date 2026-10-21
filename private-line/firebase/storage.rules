@@ -1,0 +1,17 @@
+rules_version = '2';
+// Photos, voice notes and files: only the two members of the pair can upload or open them.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /pairs/{pairId}/{file=**} {
+      function isMember() {
+        let d = firestore.get(/databases/(default)/documents/pairs/$(pairId)).data;
+        return request.auth != null
+          && (d.slots.a.uid == request.auth.uid || (d.slots.b != null && d.slots.b.uid == request.auth.uid));
+      }
+      allow read: if isMember();
+      allow create: if isMember() && request.resource.size < 25 * 1024 * 1024;
+      allow delete: if isMember();
+      allow update: if false;
+    }
+  }
+}

@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob: https://firebasestorage.googleapis.com https://www.google.com http://127.0.0.1:*; media-src 'self' blob: https://firebasestorage.googleapis.com http://127.0.0.1:*; connect-src 'self' https://*.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net wss://*.firebaseio.com http://127.0.0.1:* ws://127.0.0.1:*">
+  <meta name="theme-color" content="#0F766E">
+  <title>Private Line</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Welcome -->
+  <section class="screen" id="s-welcome">
+    <div class="center-box">
+      <img src="icon.png" class="logo" alt="">
+      <h1>Private Line</h1>
+      <p class="lead">A private line between two people: messages, photos, voice notes and calls.</p>
+      <button class="btn primary big" data-go="join">I have a pair code</button>
+      <button class="btn big" data-go="create">Create a new private line</button>
+      <p class="muted small" id="config-warning" hidden></p>
+    </div>
+  </section>
+
+  <!-- Join with a code -->
+  <section class="screen" id="s-join">
+    <header class="bar"><button class="icon-btn" data-go="welcome" aria-label="Back">←</button><h2>Activate with your code</h2></header>
+    <form class="form" id="join-form" novalidate>
+      <label>Pair code<input id="join-code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="XXXX-XXXX-XXXX" maxlength="14" inputmode="text"></label>
+      <label>Your name (shown to the other person)<input id="join-name" maxlength="40" autocomplete="name" placeholder="e.g. Femi"></label>
+      <p class="error" id="join-error"></p>
+      <button class="btn primary big" type="submit">Continue</button>
+    </form>
+  </section>
+
+  <!-- Create -->
+  <section class="screen" id="s-create">
+    <header class="bar"><button class="icon-btn" data-go="welcome" aria-label="Back">←</button><h2>Create a private line</h2></header>
+    <form class="form" id="create-form" novalidate>
+      <label>Your name (shown to the other person)<input id="create-name" maxlength="40" autocomplete="name" placeholder="e.g. Femi"></label>
+      <p class="muted">A secret pair code will be created. Give it to the one other person who will use this line. Once both phones are activated, the code can't add anyone else.</p>
+      <p class="error" id="create-error"></p>
+      <button class="btn primary big" type="submit">Continue</button>
+    </form>
+  </section>
+
+  <!-- PIN setup -->
+  <section class="screen" id="s-pin-setup">
+    <header class="bar"><button class="icon-btn" id="pin-setup-back" aria-label="Back">←</button><h2 id="pin-setup-title">Choose a PIN</h2></header>
+    <div class="form">
+      <p class="muted" id="pin-setup-help">This 6-digit PIN locks the app on this phone. You'll also need it, with the pair code, to move to a new phone. Don't forget it.</p>
+      <div class="pin-dots" id="pin-setup-dots"></div>
+      <p class="error center" id="pin-setup-error"></p>
+      <div class="keypad" data-keypad="setup"></div>
+      <label class="check" id="bio-row" hidden><input type="checkbox" id="bio-enable" checked> Also unlock with fingerprint / face</label>
+    </div>
+  </section>
+
+  <!-- Lock -->
+  <section class="screen" id="s-lock">
+    <div class="center-box">
+      <img src="icon.png" class="logo small" alt="">
+      <h2>Enter your PIN</h2>
+      <div class="pin-dots" id="lock-dots"></div>
+      <p class="error center" id="lock-error"></p>
+      <div class="keypad" data-keypad="lock"></div>
+      <button class="btn" id="bio-btn" hidden>Use fingerprint</button>
+    </div>
+  </section>
+
+  <!-- Waiting for the other person -->
+  <section class="screen" id="s-waiting">
+    <div class="center-box">
+      <h2>Your pair code</h2>
+      <div class="code-box" id="wait-code"></div>
+      <div class="row center"><button class="btn" id="copy-code">Copy</button><button class="btn primary" id="share-code">Share</button></div>
+      <p class="lead">Send this code to the other person. They install Private Line, tap <strong>I have a pair code</strong> and enter it.</p>
+      <p class="muted">Keep it secret: anyone with the code can take the second place until it's filled.</p>
+      <div class="spinner-line"><span class="spinner"></span> Waiting for the other phone…</div>
+    </div>
+  </section>
+
+  <!-- Line full: replacement phone? -->
+  <section class="screen" id="s-recover">
+    <header class="bar"><button class="icon-btn" data-go="join" aria-label="Back">←</button><h2>This line already has two phones</h2></header>
+    <div class="form">
+      <p>If this is a <strong>new phone replacing your old one</strong>, enter the PIN you used on your old phone. Your old phone will stop working with this line.</p>
+      <div class="pin-dots" id="recover-dots"></div>
+      <p class="error center" id="recover-error"></p>
+      <div class="keypad" data-keypad="recover"></div>
+    </div>
+  </section>
+
+  <!-- Chat -->
+  <section class="screen" id="s-chat">
+    <header class="bar chat-bar">
+      <div class="avatar" id="peer-avatar"></div>
+      <div class="peer">
+        <div class="peer-name" id="peer-name"></div>
+        <div class="peer-status" id="peer-status"></div>
+      </div>
+      <button class="icon-btn" id="call-audio" aria-label="Voice call" title="Voice call">📞</button>
+      <button class="icon-btn" id="call-video" aria-label="Video call" title="Video call">🎥</button>
+      <button class="icon-btn" data-go="settings" aria-label="Settings" title="Settings">⋮</button>
+    </header>
+    <div class="offline-banner" id="offline-banner" hidden>Offline — messages will send when you're back online</div>
+    <main class="messages" id="messages" aria-live="polite"></main>
+    <div class="reply-preview" id="reply-preview" hidden></div>
+    <footer class="composer" id="composer">
+      <label class="icon-btn attach" title="Photo or file" aria-label="Attach">📎<input type="file" id="file-input" accept="image/*,video/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt" hidden></label>
+      <textarea id="text" rows="1" placeholder="Message" maxlength="10000"></textarea>
+      <button class="icon-btn send" id="send" aria-label="Send" hidden>➤</button>
+      <button class="icon-btn mic" id="mic" aria-label="Record voice message">🎤</button>
+    </footer>
+    <footer class="recorder" id="recorder" hidden>
+      <button class="icon-btn" id="rec-cancel" aria-label="Cancel">🗑</button>
+      <span class="rec-dot"></span><span id="rec-time">0:00</span>
+      <span class="muted small">Recording…</span>
+      <button class="icon-btn send" id="rec-send" aria-label="Send voice message">➤</button>
+    </footer>
+  </section>
+
+  <!-- Call -->
+  <section class="screen call" id="s-call">
+    <video id="remote-video" autoplay playsinline></video>
+    <video id="local-video" autoplay playsinline muted></video>
+    <audio id="remote-audio" autoplay></audio>
+    <div class="call-info">
+      <div class="avatar big" id="call-avatar"></div>
+      <div class="call-name" id="call-name"></div>
+      <div class="call-status" id="call-status"></div>
+    </div>
+    <div class="call-actions incoming" id="call-incoming">
+      <button class="round decline" id="call-decline" aria-label="Decline">✕</button>
+      <button class="round accept" id="call-accept" aria-label="Answer">✆</button>
+    </div>
+    <div class="call-actions" id="call-controls">
+      <button class="round ghost" id="call-mute" aria-label="Mute">🎙</button>
+      <button class="round ghost" id="call-cam" aria-label="Camera on/off">📷</button>
+      <button class="round ghost" id="call-flip" aria-label="Switch camera">🔄</button>
+      <button class="round decline" id="call-end" aria-label="End call">✕</button>
+    </div>
+  </section>
+
+  <!-- Settings -->
+  <section class="screen" id="s-settings">
+    <header class="bar"><button class="icon-btn" data-go="chat" aria-label="Back">←</button><h2>Settings</h2></header>
+    <div class="form">
+      <label>Your name<input id="set-name" maxlength="40"></label>
+      <button class="btn" id="save-name">Save name</button>
+      <hr>
+      <button class="btn" id="change-pin">Change PIN</button>
+      <label class="check" id="set-bio-row"><input type="checkbox" id="set-bio"> Unlock with fingerprint / face</label>
+      <label>Lock the app after
+        <select id="set-lock-after">
+          <option value="0">Immediately</option><option value="60">1 minute</option><option value="300">5 minutes</option><option value="1800">30 minutes</option>
+        </select>
+      </label>
+      <hr>
+      <button class="btn" id="show-code">Show pair code</button>
+      <div class="code-box small" id="settings-code" hidden></div>
+      <p class="muted small">You need the pair code and your PIN to move to a new phone.</p>
+      <hr>
+      <p class="muted small" id="push-status"></p>
+      <p class="muted small" id="about"></p>
+      <button class="btn danger" id="deactivate">Remove this phone from the line</button>
+    </div>
+  </section>
+
+  <!-- Image viewer -->
+  <div class="viewer" id="viewer" hidden><img id="viewer-img" alt=""><button class="icon-btn close" id="viewer-close" aria-label="Close">✕</button></div>
+
+  <!-- Message actions -->
+  <div class="sheet" id="sheet" hidden>
+    <div class="sheet-body">
+      <button class="btn" data-msg-act="reply">Reply</button>
+      <button class="btn" data-msg-act="copy">Copy text</button>
+      <button class="btn danger" data-msg-act="delete">Delete for everyone</button>
+      <button class="btn" data-msg-act="cancel">Cancel</button>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status"></div>
+  <script src="app.js"></script>
+</body>
+</html>
