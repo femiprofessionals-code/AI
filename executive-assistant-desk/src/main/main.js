@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, shell, powerMonitor, nativeImage } = require('electron');
+const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, shell, powerMonitor, nativeImage, screen } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const { Store } = require('./store');
@@ -21,6 +21,7 @@ if (!app.requestSingleInstanceLock()) {
 
 const store = new Store(app.getPath('userData'));
 let win = null;
+let attentionWin = null;
 let tray = null;
 let quitting = false;
 let clockOffset = 0; // only changed by the automated tests
@@ -46,6 +47,7 @@ function createWindow() {
       sandbox: true,
       nodeIntegration: false,
       backgroundThrottling: false, // keep the clocks and spoken reminders running while hidden
+      autoplayPolicy: 'no-user-gesture-required', // the alarm must sound without a click
     },
   });
   win.removeMenu();
@@ -71,6 +73,118 @@ function createWindow() {
   win.webContents.on('will-navigate', (e) => e.preventDefault());
 }
 
+/* ---------- Attention mode: flashing always-on-top alert window ---------- */
+function createAttentionWindow() {
+  attentionWin = new BrowserWindow({
+    width: 560,
+    height: 340,
+    frame: false,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    alwaysOnTop: true,
+    skipTaskbar: false,
+    show: false,
+    title: 'Reminder — Executive Assistant Desk',
+    icon: assetPath('icon.png'),
+    backgroundColor: '#7a0d0d',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+      backgroundThrottling: false,
+      autoplayPolicy: 'no-user-gesture-required',
+    },
+  });
+  attentionWin.setAlwaysOnTop(true, 'screen-saver');
+  attentionWin.setVisibleOnAllWorkspaces(true);
+  attentionWin.removeMenu();
+  attentionWin.loadFile(path.join(__dirname, '..', 'renderer', 'attention.html'));
+  attentionWin.on('close', (e) => {
+    if (quitting) return;
+    // Closing the alert counts as acknowledging it.
+    e.preventDefault();
+    silence(null);
+    Scheduler.acknowledge(store.data, null);
+    store.save();
+    broadcast();
+  });
+}
+
+/** Stop a playing or queued alarm for an alert that was just acknowledged (null = all). */
+function silence(instance) {
+  if (win && !win.isDestroyed()) win.webContents.send('silence', instance);
+}
+
+function needsAttention() {
+  return store.data.reminders.active.some((x) => x.needsAck);
+}
+
+function showAttention(alert) {
+  if (!attentionWin || attentionWin.isDestroyed()) return;
+  const area = screen.getPrimaryDisplay().workArea;
+  const [w] = attentionWin.getSize();
+  attentionWin.setPosition(Math.round(area.x + (area.width - w) / 2), area.y + 24);
+  // showInactive: appear on top without taking the keyboard, so typing can't acknowledge it by accident.
+  if (!attentionWin.isVisible()) attentionWin.showInactive();
+  attentionWin.moveTop();
+  attentionWin.webContents.send('attention-alert', alert);
+  if (win && !win.isDestroyed()) win.flashFrame(true); // flash the taskbar button too
+}
+
+function syncAttention() {
+  if (needsAttention()) return;
+  if (attentionWin && !attentionWin.isDestroyed() && attentionWin.isVisible()) attentionWin.hide();
+  if (win && !win.isDestroyed()) win.flashFrame(false);
+}
+
+/* ---------- Optional external vibration via push (phone / smartwatch) ---------- */
+function webhookUrlValid(url) {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' || u.protocol === 'http:';
+  } catch (_) { return false; }
+}
+
+async function sendWebhook(alert, settings) {
+  const s = settings || store.data.settings;
+  if (!webhookUrlValid(s.webhookUrl)) throw new Error('Enter a valid web address starting with https://');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    let res;
+    if (s.webhookType === 'json') {
+      res = await fetch(s.webhookUrl, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          app: 'Executive Assistant Desk', event: alert.reason === 'repeat' ? 'reminder-repeat' : 'reminder',
+          kind: alert.kind, title: alert.title, message: alert.text,
+          startsAt: new Date(alert.startUtc).toISOString(), vibrate: true,
+        }),
+      });
+    } else {
+      // ntfy (https://ntfy.sh or a self-hosted server): priority 5 = urgent, long vibration on phones/watches.
+      res = await fetch(s.webhookUrl, {
+        method: 'POST',
+        signal: controller.signal,
+        headers: { Title: 'Executive Assistant Desk', Priority: '5', Tags: 'rotating_light' },
+        body: alert.text,
+      });
+    }
+    if (!res.ok) throw new Error(`The service answered ${res.status} ${res.statusText}`);
+    return res.status;
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('No answer from the service within 8 seconds.');
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 function showWindow(focusTarget) {
   if (!win) return;
   if (win.isMinimized()) win.restore();
@@ -86,9 +200,13 @@ function openLink(url) {
   } catch (_) { /* ignore invalid links */ }
 }
 
-function notify(title, body, onClick) {
+function notify(title, body, onClick, persistent) {
   if (!Notification.isSupported()) return;
-  const n = new Notification({ title, body, icon: assetPath('icon.png'), silent: true });
+  const n = new Notification({
+    title, body, icon: assetPath('icon.png'), silent: true,
+    timeoutType: persistent ? 'never' : 'default', // attention alerts stay on screen until clicked
+    urgency: persistent ? 'critical' : 'normal',
+  });
   n.on('click', () => (onClick ? onClick() : showWindow()));
   n.show();
 }
@@ -108,11 +226,15 @@ function snapshot() {
 }
 
 function broadcast() {
-  if (win && !win.isDestroyed()) win.webContents.send('state', snapshot());
+  const snap = snapshot();
+  if (win && !win.isDestroyed()) win.webContents.send('state', snap);
+  if (attentionWin && !attentionWin.isDestroyed()) attentionWin.webContents.send('state', snap);
+  syncAttention();
   updateTrayMenu();
 }
 
 function describeAnnouncement(a) {
+  if (a.kind === 'test') return { title: 'Test attention alert', body: a.text };
   if (a.kind === 'task') {
     return { title: a.offset ? `Task due in ${a.offset} minutes` : 'Task due now', body: a.title };
   }
@@ -122,16 +244,26 @@ function describeAnnouncement(a) {
   return { title: mins > 0 ? `Meeting in ${mins} minutes` : 'Meeting starting now', body: `${a.title}\n${times}` };
 }
 
+function dispatch(announcements) {
+  const s = store.data.settings;
+  for (const a of announcements) {
+    if (win && !win.isDestroyed()) win.webContents.send('announce', a);
+    if (a.attention) {
+      showAttention(a);
+      if (s.webhookEnabled && s.webhookUrl) sendWebhook(a).catch((e) => console.error('Vibration push failed:', e.message));
+    }
+    // Repeats re-use the on-screen alert instead of stacking more Windows notifications.
+    if (s.notifications && a.reason !== 'repeat') {
+      const { title, body } = describeAnnouncement(a);
+      notify(a.attention ? '⚠ ' + title : title, body, () => showWindow('alerts'), a.attention);
+    }
+  }
+}
+
 function tick() {
   const result = Scheduler.evaluate(store.data, now());
   if (result.changed) store.save();
-  for (const a of result.announce) {
-    if (win && !win.isDestroyed()) win.webContents.send('announce', a);
-    if (store.data.settings.notifications) {
-      const { title, body } = describeAnnouncement(a);
-      notify(title, body, () => showWindow('alerts'));
-    }
-  }
+  dispatch(result.announce);
   if (result.missed.length && store.data.settings.notifications) {
     const titles = [...new Set(result.missed.map((m) => m.title))];
     notify(
@@ -175,6 +307,9 @@ function createTray() {
 const SETTING_KEYS = {
   voiceName: 'string', volume: 'number', rate: 'number', muted: 'boolean', speechEngine: 'string',
   notifications: 'boolean', openAtLogin: 'boolean', startHidden: 'boolean', snoozeMinutes: 'number',
+  attentionEnabled: 'boolean', attentionTasks: 'boolean', alarmSound: 'string', alarmVolume: 'number',
+  alarmSeconds: 'number', repeatSeconds: 'number', flashing: 'boolean', vibrateGamepad: 'boolean',
+  webhookEnabled: 'boolean', webhookType: 'string', webhookUrl: 'string',
 };
 
 function updateSettings(patch) {
@@ -186,6 +321,16 @@ function updateSettings(patch) {
   s.rate = Math.min(2, Math.max(0.5, s.rate));
   s.snoozeMinutes = [1, 2, 5, 10, 15].includes(s.snoozeMinutes) ? s.snoozeMinutes : 5;
   if (!['browser', 'windows'].includes(s.speechEngine)) s.speechEngine = 'browser';
+  if (Array.isArray(patch && patch.attentionOffsets)) {
+    s.attentionOffsets = Scheduler.MEETING_OFFSETS.filter((o) => patch.attentionOffsets.includes(o));
+  }
+  if (!['siren', 'beeps', 'bell'].includes(s.alarmSound)) s.alarmSound = 'siren';
+  s.alarmVolume = Math.min(1, Math.max(0.05, s.alarmVolume));
+  s.alarmSeconds = [2, 4, 6, 10].includes(s.alarmSeconds) ? s.alarmSeconds : 4;
+  s.repeatSeconds = [30, 60, 120, 180, 300].includes(s.repeatSeconds) ? s.repeatSeconds : 60;
+  if (!['ntfy', 'json'].includes(s.webhookType)) s.webhookType = 'ntfy';
+  s.webhookUrl = s.webhookUrl.trim().slice(0, 1000);
+  if (s.webhookEnabled && !webhookUrlValid(s.webhookUrl)) s.webhookEnabled = false;
   store.save();
   if ('openAtLogin' in (patch || {})) applyLoginItem();
   broadcast();
@@ -243,8 +388,21 @@ function registerIpc() {
   handle('task:complete', (id, done) => mutate(() => Model.setTaskCompleted(store.data, id, done, now())));
   handle('task:delete', (id) => mutate(() => Model.deleteTask(store.data, id)));
   handle('settings:update', (patch) => updateSettings(patch));
-  handle('reminder:snooze', (instance, minutes) => mutate(() => Scheduler.snooze(store.data, instance, Number(minutes) || store.data.settings.snoozeMinutes, now())));
-  handle('reminder:dismiss', (instance) => mutate(() => Scheduler.dismiss(store.data, instance, now())));
+  handle('reminder:snooze', (instance, minutes) => { silence(instance); return mutate(() => Scheduler.snooze(store.data, instance, Number(minutes) || store.data.settings.snoozeMinutes, now())); });
+  handle('reminder:dismiss', (instance) => { silence(instance); return mutate(() => Scheduler.dismiss(store.data, instance, now())); });
+  handle('reminder:acknowledge', (instance) => { silence(instance || null); return mutate(() => Scheduler.acknowledge(store.data, instance || null)); });
+  handle('attention:test', () => {
+    const a = Scheduler.startTestAlert(store.data, now());
+    store.save();
+    dispatch([a]);
+    broadcast();
+    return true;
+  });
+  handle('vibration:testWebhook', (draft) => sendWebhook(
+    { kind: 'test', reason: 'test', title: 'Test', text: 'Test vibration from Executive Assistant Desk.', startUtc: now() },
+    { ...store.data.settings, ...(draft || {}) },
+  ));
+  handle('app:showMain', (target) => showWindow(target));
   handle('missed:clear', (key) => mutate(() => {
     store.data.reminders.missed = key ? store.data.reminders.missed.filter((m) => m.instance !== key) : [];
   }));
@@ -275,6 +433,7 @@ if (app.hasSingleInstanceLock()) {
     if (process.env.EAD_CLOCK_OFFSET_MS && IS_TEST) clockOffset = Number(process.env.EAD_CLOCK_OFFSET_MS) || 0;
     registerIpc();
     createWindow();
+    createAttentionWindow();
     createTray();
     applyLoginItem();
     // First evaluation happens once the page can receive announcements.

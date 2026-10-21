@@ -1,7 +1,7 @@
 {
   "name": "executive-assistant-desk",
   "productName": "Executive Assistant Desk",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Meetings, spoken reminders, three time-zone clocks and daily tasks for an Executive Director's assistant.",
   "main": "src/main/main.js",
   "author": "Executive Assistant Desk",

@@ -245,11 +245,12 @@
     let html = '';
     for (const a of active) {
       const meeting = a.kind === 'meeting' ? S.meetings.find((m) => m.id === a.refId) : null;
-      html += `<div class="alert active-alert" data-instance="${esc(a.instance)}">
+      html += `<div class="alert active-alert ${a.needsAck ? 'needs-ack' : ''} ${a.needsAck && S.settings.flashing ? 'flash' : ''}" data-instance="${esc(a.instance)}">
         <div class="alert-icon">🔔</div>
-        <div class="alert-body"><strong>${a.kind === 'meeting' ? 'Reminder' : 'Task reminder'}: ${esc(a.title)}</strong>
+        <div class="alert-body"><strong>${a.kind === 'task' ? 'Task reminder' : a.kind === 'test' ? 'Test alert' : 'Reminder'}: ${esc(a.title)}</strong>
           <div class="muted">${a.kind === 'meeting' ? (a.startUtc > now() ? 'Starts' : 'Started') : 'Due'} ${esc(relative(a.startUtc - now()))}</div></div>
         <div class="alert-actions">
+          ${a.needsAck ? `<button class="btn ack" data-act="acknowledge" data-instance="${esc(a.instance)}">Acknowledge</button>` : ''}
           ${meeting && meeting.link ? `<button class="btn small primary" data-act="join" data-id="${meeting.id}">Join</button>` : ''}
           <button class="btn small" data-act="snooze" data-instance="${esc(a.instance)}">Snooze ${snooze} min</button>
           <button class="btn small" data-act="dismiss" data-instance="${esc(a.instance)}">Dismiss</button>
@@ -307,6 +308,30 @@
     mute.textContent = s.muted ? '🔇 Muted' : '🔊 Voice on';
     mute.classList.toggle('muted-on', s.muted);
     if (document.activeElement !== $('#set-voice')) renderVoices();
+
+    $('#set-attention').checked = s.attentionEnabled;
+    $('#attention-options').classList.toggle('disabled', !s.attentionEnabled);
+    for (const cb of $$('#set-att-offsets input')) cb.checked = s.attentionOffsets.includes(Number(cb.value));
+    $('#set-att-tasks').checked = s.attentionTasks;
+    $('#set-repeat').value = String(s.repeatSeconds);
+    $('#set-flashing').checked = s.flashing;
+    $('#set-alarm-sound').value = s.alarmSound;
+    $('#set-alarm-volume').value = s.alarmVolume;
+    $('#out-alarm-volume').textContent = Math.round(s.alarmVolume * 100) + '%';
+    $('#set-alarm-seconds').value = String(s.alarmSeconds);
+    $('#set-gamepad').checked = s.vibrateGamepad;
+    $('#set-webhook').checked = s.webhookEnabled;
+    $('#set-webhook-type').value = s.webhookType;
+    if (document.activeElement !== $('#set-webhook-url')) $('#set-webhook-url').value = s.webhookUrl;
+    renderGamepadStatus();
+  }
+
+  function renderGamepadStatus() {
+    const pads = window.Vibrate.controllers();
+    const vib = pads.filter((p) => p.canVibrate);
+    $('#gamepad-status').textContent = !pads.length
+      ? 'No controller detected. Connect it, then press any button on it once.'
+      : vib.length ? `Ready: ${vib.map((p) => p.name.replace(/\s*\(.*$/, '')).join(', ')}` : 'Controller found, but it does not support vibration.';
   }
 
   function renderAll() {
@@ -488,6 +513,7 @@
       case 'delete-task':
         if (await confirmBox(`Delete task “${task.title}”?`, 'Delete')) await act(() => desk.deleteTask(id), 'Task deleted.');
         break;
+      case 'acknowledge': await act(() => desk.acknowledge(el.dataset.instance)); break;
       case 'snooze': await act(() => desk.snooze(el.dataset.instance, S.settings.snoozeMinutes), `Snoozed for ${S.settings.snoozeMinutes} minutes.`); break;
       case 'dismiss': await act(() => desk.dismiss(el.dataset.instance), 'Reminder dismissed. No more reminders for this one.'); break;
       case 'clear-missed': await act(() => desk.clearMissed(el.dataset.instance)); break;
@@ -522,6 +548,51 @@
       $('#voice-status').textContent = S.settings.muted ? 'Playing test (reminders are currently muted).' : '';
     });
     speech.onVoices = () => { if (S && S.settings.speechEngine !== 'windows') renderVoices(); };
+
+    // Attention mode
+    $('#set-attention').addEventListener('change', (e) => set({ attentionEnabled: e.target.checked }));
+    $('#set-att-offsets').addEventListener('change', () => set({
+      attentionOffsets: $$('#set-att-offsets input').filter((c) => c.checked).map((c) => Number(c.value)),
+    }));
+    $('#set-att-tasks').addEventListener('change', (e) => set({ attentionTasks: e.target.checked }));
+    $('#set-repeat').addEventListener('change', (e) => set({ repeatSeconds: Number(e.target.value) }));
+    $('#set-flashing').addEventListener('change', (e) => set({ flashing: e.target.checked }));
+    $('#set-alarm-sound').addEventListener('change', (e) => set({ alarmSound: e.target.value }));
+    $('#set-alarm-volume').addEventListener('input', (e) => { $('#out-alarm-volume').textContent = Math.round(e.target.value * 100) + '%'; });
+    $('#set-alarm-volume').addEventListener('change', (e) => set({ alarmVolume: Number(e.target.value) }));
+    $('#set-alarm-seconds').addEventListener('change', (e) => set({ alarmSeconds: Number(e.target.value) }));
+    $('#btn-test-alarm').addEventListener('click', () => {
+      window.Alarm.play({ sound: $('#set-alarm-sound').value, volume: Number($('#set-alarm-volume').value), seconds: Number($('#set-alarm-seconds').value) });
+    });
+    $('#btn-stop-alarm').addEventListener('click', () => window.Alarm.stop());
+    $('#btn-test-attention').addEventListener('click', () => act(() => desk.testAttention(), 'Test alert started. Press Acknowledge to stop it.'));
+
+    // External vibration
+    $('#set-gamepad').addEventListener('change', (e) => set({ vibrateGamepad: e.target.checked }));
+    $('#btn-test-gamepad').addEventListener('click', async () => {
+      const n = await window.Vibrate.pulse();
+      renderGamepadStatus();
+      if (!n) $('#gamepad-status').textContent = 'No vibrating controller found. Connect it, press any button on it once, then try again.';
+      else $('#gamepad-status').textContent = `Vibrated ${n} controller${n > 1 ? 's' : ''}.`;
+    });
+    window.addEventListener('gamepadconnected', renderGamepadStatus);
+    window.addEventListener('gamepaddisconnected', renderGamepadStatus);
+    $('#set-webhook-type').addEventListener('change', (e) => set({ webhookType: e.target.value }));
+    $('#set-webhook-url').addEventListener('change', (e) => set({ webhookUrl: e.target.value }));
+    $('#set-webhook').addEventListener('change', async (e) => {
+      const s = await set({ webhookEnabled: e.target.checked, webhookUrl: $('#set-webhook-url').value });
+      if (e.target.checked && !s.webhookEnabled) toast('Enter the address (starting with https://) first.', 'error');
+    });
+    $('#btn-test-webhook').addEventListener('click', async () => {
+      const st = $('#webhook-status');
+      st.textContent = 'Sending…';
+      try {
+        await desk.testWebhook({ webhookType: $('#set-webhook-type').value, webhookUrl: $('#set-webhook-url').value });
+        st.textContent = 'Sent. Your phone or watch should buzz.';
+      } catch (err) {
+        st.textContent = 'Failed: ' + err.message;
+      }
+    });
   }
 
   async function init() {
@@ -542,7 +613,8 @@
     bindSettings();
 
     desk.onState((st) => { S = st; renderAll(); });
-    desk.onAnnounce((a) => speech.enqueue({ key: a.key, text: a.text }));
+    desk.onAnnounce((a) => speech.enqueue({ key: a.key, text: a.text, alarm: !!a.attention, instance: a.instance }));
+    desk.onSilence((instance) => speech.cancelWhere((e) => e.alarm && (instance == null || e.instance === instance)));
     desk.onFocus(handleFocus);
     S = await desk.getState();
     renderAll();

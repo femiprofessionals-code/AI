@@ -18,6 +18,20 @@ const DEFAULT_SETTINGS = {
   startHidden: true,
   snoozeMinutes: 5,
   trayHintShown: false,
+  // Attention mode: loud alarm, then the spoken reminder, repeated until acknowledged.
+  attentionEnabled: false,
+  attentionOffsets: [30, 20, 10, 5],
+  attentionTasks: true,
+  alarmSound: 'siren', // 'siren' | 'beeps' | 'bell'
+  alarmVolume: 1,
+  alarmSeconds: 4,
+  repeatSeconds: 60,
+  flashing: true,
+  // Optional external vibration (the computer itself is never assumed to vibrate).
+  vibrateGamepad: false,
+  webhookEnabled: false,
+  webhookType: 'ntfy', // 'ntfy' (phone/watch via the ntfy app) | 'json' (any service accepting a JSON POST)
+  webhookUrl: '',
 };
 
 function emptyData() {

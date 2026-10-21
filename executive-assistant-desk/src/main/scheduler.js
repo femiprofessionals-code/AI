@@ -10,6 +10,10 @@
  * Reminders whose time passed while the computer was asleep or the app was closed are
  * recorded as "missed" (shown in the app, never spoken). If several reminders for the
  * same meeting are due at once, only the most recent one can be spoken.
+ *
+ * Attention mode: an announcement flagged `attention` plays an alarm before the spoken
+ * reminder, and repeats every `repeatSeconds` until it is acknowledged (or snoozed /
+ * dismissed), the meeting ends, or the computer slept through the repeat time.
  */
 const Tasks = require('../shared/tasks');
 
@@ -18,6 +22,8 @@ const MEETING_OFFSETS = [30, 20, 10, 5];
 const GRACE_MS = 2 * MINUTE; // how late a reminder may still be spoken
 const MISSED_RELEVANCE_MS = 24 * 60 * MINUTE; // older items are dropped silently
 const FIRED_RETENTION_MS = 14 * 24 * 60 * MINUTE;
+const TASK_REPEAT_WINDOW_MS = 60 * MINUTE; // task alerts stop repeating an hour after the due time
+const TEST_INSTANCE = 'test:attention';
 
 function meetingInstanceKey(m) { return `m:${m.id}:${m.startUtc}`; }
 function taskInstanceKey(t, dueUtc) { return `t:${t.id}:${dueUtc}`; }
@@ -25,12 +31,14 @@ function taskInstanceKey(t, dueUtc) { return `t:${t.id}:${dueUtc}`; }
 function minutesPhrase(n) { return n === 1 ? '1 minute' : `${n} minutes`; }
 
 function meetingText(title, minutesLeft) {
-  if (minutesLeft <= 0) return `Reminder: ${title} is starting now.`;
+  if (minutesLeft < 0) return `Reminder: ${title} started ${minutesPhrase(-minutesLeft)} ago.`;
+  if (minutesLeft === 0) return `Reminder: ${title} is starting now.`;
   return `Reminder: ${title} starts in ${minutesPhrase(minutesLeft)}.`;
 }
 
 function taskText(title, minutesLeft) {
-  if (minutesLeft <= 0) return `Task reminder: ${title} is due now.`;
+  if (minutesLeft < 0) return `Task reminder: ${title} was due ${minutesPhrase(-minutesLeft)} ago.`;
+  if (minutesLeft === 0) return `Task reminder: ${title} is due now.`;
   return `Task reminder: ${title} is due in ${minutesPhrase(minutesLeft)}.`;
 }
 
@@ -63,6 +71,25 @@ function reminderSlots(data) {
   return slots;
 }
 
+function attentionSettings(data) {
+  const s = data.settings || {};
+  return {
+    enabled: !!s.attentionEnabled,
+    offsets: Array.isArray(s.attentionOffsets) ? s.attentionOffsets : MEETING_OFFSETS,
+    tasks: s.attentionTasks !== false,
+    repeatMs: Math.max(15, Number(s.repeatSeconds) || 60) * 1000,
+  };
+}
+
+/** Whether this reminder should use attention mode (alarm + repeat until acknowledged). */
+function wantsAttention(data, slot, reason) {
+  const a = attentionSettings(data);
+  if (!a.enabled) return false;
+  if (slot.kind === 'task') return a.tasks;
+  if (reason === 'snooze') return true;
+  return a.offsets.includes(slot.offset);
+}
+
 function announcementFor(slot, now, reason) {
   const minutesLeft = Math.max(0, Math.round((slot.startUtc - now) / MINUTE));
   // Within the grace window, say the scheduled lead time ("20 minutes"), not 19.
@@ -73,7 +100,13 @@ function announcementFor(slot, now, reason) {
     startUtc: slot.startUtc, offset: slot.offset, reason, at: now,
     text: slot.kind === 'meeting' ? meetingText(slot.title, spokenMinutes) : taskText(slot.title, spokenMinutes),
     timeZone: slot.timeZone,
+    attention: false,
   };
+}
+
+/** When an unacknowledged alert stops repeating on its own. */
+function repeatUntilFor(slot) {
+  return slot.kind === 'task' ? slot.startUtc + TASK_REPEAT_WINDOW_MS : slot.endUtc;
 }
 
 /**
@@ -108,7 +141,9 @@ function evaluate(data, now) {
       changed = true;
       const late = now - s.dueAt;
       if (i === 0 && late <= GRACE_MS) {
-        announce.push(announcementFor(s, now, 'scheduled'));
+        const a = announcementFor(s, now, 'scheduled');
+        a.attention = wantsAttention(data, s, 'scheduled');
+        announce.push(a);
         announcedInstances.add(inst);
       } else if (now - s.startUtc <= MISSED_RELEVANCE_MS) {
         const m = {
@@ -136,7 +171,9 @@ function evaluate(data, now) {
     const slot = slots.find((s) => s.instance === sn.instance);
     if (announcedInstances.has(sn.instance)) continue;
     if (now - sn.at <= GRACE_MS && now < slot.endUtc + MINUTE) {
-      announce.push(announcementFor(slot, now, 'snooze'));
+      const a = announcementFor(slot, now, 'snooze');
+      a.attention = wantsAttention(data, slot, 'snooze');
+      announce.push(a);
       announcedInstances.add(sn.instance);
       // Don't repeat with a scheduled reminder that falls within the next minute.
       for (const s of slots) {
@@ -148,15 +185,43 @@ function evaluate(data, now) {
 
   // Active (snooze/dismiss-able) reminders: one per instance, newest wins.
   for (const a of announce) {
+    const slot = slots.find((s) => s.instance === a.instance);
     r.active = r.active.filter((x) => x.instance !== a.instance);
-    r.active.push({ instance: a.instance, kind: a.kind, refId: a.refId, title: a.title, startUtc: a.startUtc, text: a.text, at: now });
+    r.active.push({
+      instance: a.instance, kind: a.kind, refId: a.refId, title: a.title, startUtc: a.startUtc, text: a.text, at: now,
+      needsAck: a.attention, lastAlertAt: now, repeatCount: 0, repeatUntil: repeatUntilFor(slot),
+    });
   }
   const activeBefore = r.active.length;
   r.active = r.active.filter((x) => {
+    if (x.kind === 'test') return now < x.expiresAt;
     const slot = slots.find((s) => s.instance === x.instance);
     return slot && !r.dismissed[x.instance] && now < slot.endUtc + 15 * MINUTE;
   });
   if (r.active.length !== activeBefore) changed = true;
+
+  // Attention mode: repeat unacknowledged alerts.
+  const att = attentionSettings(data);
+  for (const x of r.active) {
+    if (!x.needsAck || announcedInstances.has(x.instance)) continue;
+    const interval = x.repeatMs || att.repeatMs;
+    const next = x.lastAlertAt + interval;
+    if (now < next) continue;
+    changed = true;
+    const stale = now - next > GRACE_MS; // asleep or app closed through the repeat time
+    const tooMany = x.maxRepeats != null && x.repeatCount >= x.maxRepeats;
+    if (!att.enabled && x.kind !== 'test') { x.needsAck = false; continue; }
+    if (stale || tooMany || now >= x.repeatUntil) { x.needsAck = false; continue; }
+    x.lastAlertAt = now;
+    x.repeatCount += 1;
+    const minutesLeft = Math.round((x.startUtc - now) / MINUTE);
+    const text = x.kind === 'task' ? taskText(x.title, minutesLeft) : meetingText(x.title, minutesLeft);
+    x.text = text;
+    announce.push({
+      key: `${x.instance}:repeat:${now}`, instance: x.instance, kind: x.kind, refId: x.refId, title: x.title,
+      startUtc: x.startUtc, offset: null, reason: 'repeat', at: now, text, attention: true, repeat: x.repeatCount,
+    });
+  }
 
   // Housekeeping.
   const missedBefore = r.missed.length;
@@ -171,6 +236,36 @@ function evaluate(data, now) {
 
   announce.sort((a, b) => a.startUtc - b.startUtc || a.at - b.at);
   return { announce, missed, changed };
+}
+
+/** Stop repeating the alarm for this alert; the banner and later scheduled reminders remain. */
+function acknowledge(data, instance) {
+  let n = 0;
+  for (const x of data.reminders.active) {
+    if ((instance == null || x.instance === instance) && x.needsAck) { x.needsAck = false; n++; }
+  }
+  return n;
+}
+
+/**
+ * A practice alert for the "Test attention alert" button: alarm, voice, flashing window and
+ * vibration, repeating every 20 seconds (at most 3 times) until acknowledged.
+ */
+function startTestAlert(data, now) {
+  const r = data.reminders;
+  r.active = r.active.filter((x) => x.instance !== TEST_INSTANCE);
+  const startUtc = now + 20 * MINUTE;
+  const title = 'Budget review with the Executive Director';
+  const text = meetingText(title, 20);
+  r.active.push({
+    instance: TEST_INSTANCE, kind: 'test', refId: null, title, startUtc, text, at: now,
+    needsAck: true, lastAlertAt: now, repeatCount: 0, repeatMs: 20 * 1000, maxRepeats: 3,
+    repeatUntil: now + 5 * MINUTE, expiresAt: now + 5 * MINUTE,
+  });
+  return {
+    key: `${TEST_INSTANCE}:${now}`, instance: TEST_INSTANCE, kind: 'test', refId: null, title, startUtc,
+    offset: 20, reason: 'test', at: now, text, attention: true,
+  };
 }
 
 function snooze(data, instance, minutes, now) {
@@ -211,6 +306,6 @@ function nextDueAt(data, now) {
 }
 
 module.exports = {
-  MEETING_OFFSETS, GRACE_MS, MINUTE, evaluate, snooze, dismiss, upcoming, nextDueAt,
+  MEETING_OFFSETS, GRACE_MS, MINUTE, TEST_INSTANCE, evaluate, snooze, dismiss, acknowledge, startTestAlert, upcoming, nextDueAt,
   reminderSlots, meetingText, taskText, meetingInstanceKey,
 };

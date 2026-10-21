@@ -11,6 +11,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const http = require('http');
 const TZ = require('../../src/shared/tz');
 
 const ROOT = path.join(__dirname, '..', '..');
@@ -181,6 +182,106 @@ const step = (msg) => console.log('  ✓ ' + msg);
   await page.waitForSelector('#meetings-list .card.cancelled');
   step('meeting cancelled');
 
+  // ================= Attention mode =================
+  const hooks = [];
+  const server = http.createServer((req, res) => {
+    let body = '';
+    req.on('data', (d) => { body += d; });
+    req.on('end', () => { hooks.push({ headers: req.headers, body: JSON.parse(body) }); res.end('ok'); });
+  });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  const hookUrl = `http://127.0.0.1:${server.address().port}/buzz`;
+
+  const visibleAttention = () => app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows().some((w) => w.getTitle().startsWith('Reminder') && w.isVisible()));
+  const attentionPage = app.windows().find((w) => w.url().includes('attention.html'));
+  assert.ok(attentionPage, 'attention window exists');
+  const until = async (fn, ms = 15000) => {
+    const t = Date.now();
+    while (Date.now() - t < ms) { if (await fn()) return; await new Promise((r) => setTimeout(r, 200)); }
+    throw new Error('timed out: ' + fn.toString());
+  };
+  const speechLog = () => page.evaluate(() => window.__speech.log.map((e) => ({ text: e.text, alarm: !!e.alarm, skipped: !!e.skipped })));
+
+  await page.click('[data-view=settings]');
+  await page.check('#set-attention');
+  await page.selectOption('#set-repeat', '30');
+  await page.selectOption('#set-alarm-seconds', '2');
+  await page.selectOption('#set-webhook-type', 'json');
+  await page.fill('#set-webhook-url', hookUrl);
+  await page.press('#set-webhook-url', 'Tab');
+  await page.check('#set-webhook');
+  await until(async () => (await page.evaluate(() => window.desk.getState())).settings.webhookEnabled);
+  await page.screenshot({ path: path.join(SHOTS, '7-attention-settings.png') });
+  step('attention mode, 30 s repeat and a vibration push address set in Settings');
+
+  // Test button: full sequence.
+  const logStart = (await speechLog()).length;
+  await page.click('#btn-test-attention');
+  await until(visibleAttention);
+  await attentionPage.waitForSelector('body.flash button.ack');
+  await until(async () => (await speechLog()).length > logStart);
+  let entry = (await speechLog())[logStart];
+  assert.equal(entry.alarm, true);
+  assert.equal(entry.text, 'Reminder: Budget review with the Executive Director starts in 20 minutes.');
+  await until(async () => (await page.evaluate(() => window.Alarm.log.length)) >= 1);
+  await until(async () => hooks.length >= 1);
+  assert.equal(hooks[0].body.vibrate, true);
+  await attentionPage.screenshot({ path: path.join(SHOTS, '8-attention-alert.png') });
+  step('Test attention alert: alarm, then voice, flashing on-top window, vibration push sent');
+
+  // It repeats until acknowledged.
+  const offsetNow = (await page.evaluate(() => window.desk.getState())).clockOffset;
+  await page.evaluate((ms) => window.desk.test.setClockOffset(ms), offsetNow + 21000);
+  await until(async () => (await speechLog()).filter((e) => e.alarm).length >= 2);
+  await until(async () => hooks.length >= 2);
+  step('test alert repeated after 20 s (alarm + voice + push again)');
+  await attentionPage.click('button.ack');
+  await until(async () => !(await visibleAttention()));
+  const alarmsAfterAck = (await speechLog()).filter((e) => e.alarm).length;
+  await page.evaluate((ms) => window.desk.test.setClockOffset(ms), offsetNow + 45000);
+  await new Promise((r) => setTimeout(r, 1500));
+  assert.equal((await speechLog()).filter((e) => e.alarm).length, alarmsAfterAck);
+  step('Acknowledge closes the alert and stops the repeats');
+
+  // A real meeting in attention mode.
+  const st0 = await page.evaluate(() => window.desk.getState());
+  const appNow = Date.now() + st0.clockOffset;
+  const start2 = Math.ceil((appNow + 45 * MIN) / MIN) * MIN;
+  await page.evaluate((m) => window.desk.saveMeeting(m), {
+    title: 'Board chair call', date: TZ.dateIn(start2, 'America/New_York'), time: TZ.timeIn(start2, 'America/New_York'),
+    timeZone: 'America/New_York', duration: 30, link: 'https://teams.example.com/meet/1',
+  });
+  const hooksBefore = hooks.length;
+  await page.evaluate((ms) => window.desk.test.setClockOffset(ms), start2 - 30 * MIN + 1000 - Date.now());
+  await until(visibleAttention);
+  await attentionPage.waitForSelector('.item:has-text("Board chair call")');
+  await until(async () => hooks.length > hooksBefore);
+  assert.match(hooks[hooks.length - 1].body.message, /Board chair call starts in 30 minutes/);
+  await page.click('[data-view=dashboard]');
+  await page.waitForSelector('.active-alert.needs-ack.flash');
+  await page.screenshot({ path: path.join(SHOTS, '9-dashboard-attention.png') });
+  step('meeting reminder in attention mode: flashing window + flashing banner + push');
+
+  await page.evaluate((ms) => window.desk.test.setClockOffset(ms), start2 - 30 * MIN + 31000 - Date.now());
+  await until(async () => (await speechLog()).some((e) => e.alarm && /Board chair call starts in 29 minutes/.test(e.text)));
+  step('repeated 30 s later ("starts in 29 minutes")');
+  await page.click('.active-alert [data-act=acknowledge]');
+  await until(async () => !(await visibleAttention()));
+  const st1 = await page.evaluate(() => window.desk.getState());
+  assert.equal(st1.reminders.active.length, 1, 'banner remains after acknowledging');
+  assert.equal(st1.reminders.active[0].needsAck, false);
+  step('Acknowledge from the main window stops the alarm; banner stays for Snooze/Dismiss/Join');
+
+  // Mute silences alarm + voice but the alert still appears.
+  await page.evaluate(() => window.desk.updateSettings({ muted: true }));
+  await page.evaluate((ms) => window.desk.test.setClockOffset(ms), start2 - 20 * MIN + 1000 - Date.now());
+  await until(visibleAttention);
+  await until(async () => (await speechLog()).some((e) => /starts in 20 minutes/.test(e.text) && e.skipped));
+  step('while muted: alert window still appears, alarm and voice are silent');
+  await attentionPage.click('button.ack');
+
+  server.close();
   await quit(app, page);
   fs.rmSync(USER_DATA, { recursive: true, force: true });
   console.log('\nE2E passed. Screenshots in', SHOTS);

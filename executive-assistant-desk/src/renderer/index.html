@@ -84,6 +84,64 @@
 
     <!-- Settings -->
     <section class="view" id="view-settings">
+      <div class="panel attention-panel">
+        <div class="panel-head">
+          <h2>Attention mode</h2>
+          <button class="btn primary" id="btn-test-attention">Test attention alert</button>
+        </div>
+        <p class="muted">For reminders that must not be missed: a loud alarm plays, then the reminder is spoken, a flashing alert appears on top of all windows, and it repeats until you press <strong>Acknowledge</strong> (or Snooze / Dismiss). The test plays the full sequence and repeats every 20 seconds, up to 3 times.</p>
+        <label class="check big"><input type="checkbox" id="set-attention"> Turn on attention mode</label>
+        <div class="grid3" id="attention-options">
+          <div>
+            <div class="field-label">Use it for these meeting reminders</div>
+            <div class="row" id="set-att-offsets">
+              <label class="check"><input type="checkbox" value="30"> 30 min</label>
+              <label class="check"><input type="checkbox" value="20"> 20 min</label>
+              <label class="check"><input type="checkbox" value="10"> 10 min</label>
+              <label class="check"><input type="checkbox" value="5"> 5 min</label>
+            </div>
+            <label class="check"><input type="checkbox" id="set-att-tasks"> Also for spoken task reminders</label>
+            <label class="field"><span>Repeat until acknowledged, every</span>
+              <select id="set-repeat">
+                <option value="30">30 seconds</option><option value="60">1 minute</option><option value="120">2 minutes</option>
+                <option value="180">3 minutes</option><option value="300">5 minutes</option>
+              </select>
+            </label>
+            <label class="check"><input type="checkbox" id="set-flashing"> Flashing alert (turn off for a steady, non-flashing alert)</label>
+          </div>
+          <div>
+            <label class="field"><span>Alarm sound</span>
+              <select id="set-alarm-sound">
+                <option value="siren">Siren</option><option value="beeps">Rapid beeps</option><option value="bell">Bell</option>
+              </select>
+            </label>
+            <label class="field"><span>Alarm volume <output id="out-alarm-volume"></output></span><input type="range" id="set-alarm-volume" min="0.05" max="1" step="0.05"></label>
+            <label class="field"><span>Alarm length</span>
+              <select id="set-alarm-seconds">
+                <option value="2">2 seconds</option><option value="4">4 seconds</option><option value="6">6 seconds</option><option value="10">10 seconds</option>
+              </select>
+            </label>
+            <div class="row"><button class="btn" id="btn-test-alarm">Test alarm sound</button><button class="btn" id="btn-stop-alarm">Stop</button></div>
+            <p class="muted small">The alarm volume is relative to the Windows volume. “Mute” in the top bar silences the alarm and voice; the flashing alert still appears.</p>
+          </div>
+          <div>
+            <div class="field-label">External vibration (optional)</div>
+            <p class="muted small">Computers don't vibrate, so nothing here is required. Connect one of these if you want a physical buzz:</p>
+            <label class="check"><input type="checkbox" id="set-gamepad"> Vibrate a game controller (Xbox-compatible, USB or Bluetooth)</label>
+            <div class="row"><button class="btn small" id="btn-test-gamepad">Test controller</button><span class="muted small" id="gamepad-status"></span></div>
+            <label class="check"><input type="checkbox" id="set-webhook"> Send an urgent push to a phone or smartwatch</label>
+            <label class="field"><span>Service</span>
+              <select id="set-webhook-type">
+                <option value="ntfy">ntfy app (phone / watch)</option>
+                <option value="json">Other service (JSON web request)</option>
+              </select>
+            </label>
+            <label class="field"><span>Address</span><input id="set-webhook-url" placeholder="https://ntfy.sh/your-private-topic-name"></label>
+            <div class="row"><button class="btn small" id="btn-test-webhook">Test push</button><span class="muted small" id="webhook-status"></span></div>
+            <p class="muted small">The meeting title is sent to this service. With ntfy.sh, anyone who knows the topic name can read it, so use a long, hard-to-guess name.</p>
+          </div>
+        </div>
+      </div>
       <div class="grid2">
         <div class="panel">
           <h2>Spoken reminders</h2>
@@ -197,6 +255,8 @@
 
   <script src="../shared/tz.js"></script>
   <script src="../shared/tasks.js"></script>
+  <script src="alarm.js"></script>
+  <script src="vibrate.js"></script>
   <script src="speech.js"></script>
   <script src="app.js"></script>
 </body>

@@ -2,6 +2,7 @@
  * Spoken announcement queue. Announcements play one at a time in arrival order
  * (overlapping meetings never talk over each other), and each reminder key is
  * spoken at most once per session even if it is delivered twice.
+ * Attention-mode entries (`alarm: true`) play the loud alarm first, then the voice.
  */
 (function () {
   const PAUSE_BETWEEN_MS = 700;
@@ -44,16 +45,40 @@
           const entry = this.queue.shift();
           const s = this.getSettings();
           if (s.muted && !entry.force) { entry.skipped = true; continue; }
+          this.current = entry;
           try {
+            if (entry.alarm && window.Alarm) {
+              await window.Alarm.play({ sound: s.alarmSound, volume: s.alarmVolume, seconds: s.alarmSeconds });
+              entry.alarmPlayed = true;
+              if (entry.cancelled) continue;
+              await new Promise((r) => setTimeout(r, 250));
+            }
             await this.speak(entry.text, s);
             entry.spoken = true;
           } catch (e) {
             entry.error = String(e && e.message || e);
+          } finally {
+            this.current = null;
           }
           if (this.queue.length) await new Promise((r) => setTimeout(r, PAUSE_BETWEEN_MS));
         }
       } finally {
         this.busy = false;
+      }
+    }
+
+    /** Drop queued alarms for alerts that were acknowledged, and silence one that is playing. */
+    cancelWhere(pred) {
+      this.queue = this.queue.filter((e) => {
+        if (!pred(e)) return true;
+        e.cancelled = true;
+        e.skipped = true;
+        return false;
+      });
+      if (this.current && pred(this.current)) {
+        this.current.cancelled = true;
+        if (this.current.alarm && window.Alarm) window.Alarm.stop();
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
       }
     }
 

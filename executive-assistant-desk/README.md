@@ -7,6 +7,7 @@ A Windows desktop app for managing an Executive Director's meetings and daily ta
 - **Spoken reminders** 30, 20, 10 and 5 minutes before each meeting, plus a Windows notification:
   *"Reminder: Budget review with the Executive Director starts in 20 minutes."*
 - **Daily tasks** with due date, optional due time, priority, notes, a completion checkbox, Reopen, and optional spoken reminders.
+- **Attention mode** (optional) for reminders that must not be missed: a loud alarm, then the spoken reminder, a flashing alert on top of all windows, repeated until you press **Acknowledge**. Optional vibration on an external device (game controller, or phone/smartwatch via push).
 - Runs in the **system tray** when the window is closed, and can **start automatically** when you sign in to Windows.
 - All data is saved on this computer only.
 
@@ -16,7 +17,7 @@ A Windows desktop app for managing an Executive Director's meetings and daily ta
 
 ## Install on Windows
 
-1. Get the installer, **`Executive-Assistant-Desk-Setup-1.0.0.exe`**:
+1. Get the installer, **`Executive-Assistant-Desk-Setup-1.1.0.exe`**:
    - from the **Actions** tab of this repository → the latest *Executive Assistant Desk (Windows build)* run → **Artifacts** → `Executive-Assistant-Desk-Setup` (it downloads as a .zip; extract it), **or**
    - build it yourself (see *Build the installer* below).
 2. Double-click the installer.
@@ -40,6 +41,54 @@ A Windows desktop app for managing an Executive Director's meetings and daily ta
 
 ---
 
+## Attention mode
+
+Turn it on in **Settings → Attention mode**, then press **Test attention alert** to try the full sequence. The test repeats every 20 seconds, up to 3 times, until you press Acknowledge.
+
+![Attention alert](docs/screenshots/8-attention-alert.png)
+
+When a reminder uses attention mode:
+
+1. A **loud alarm** plays (Siren, Rapid beeps or Bell; volume and length adjustable; **Test alarm sound** button).
+2. The reminder is **spoken** right after the alarm.
+3. A **flashing red/yellow alert** appears at the top of the screen, above all other windows. The taskbar button flashes, the dashboard banner flashes, and the Windows notification stays on screen until clicked.
+   - The alert appears without taking the keyboard, so typing in another program can't acknowledge it by accident.
+   - It flashes once per second, well below the 3-flashes-per-second safety limit. Untick **Flashing alert** for a steady red alert instead.
+4. Steps 1–3 **repeat** every 30 s / 1 / 2 / 3 / 5 minutes (your choice) until you press **Acknowledge** (or **Snooze**, **Dismiss** or **Join meeting**). Closing the alert window also counts as acknowledging it.
+
+Notes:
+- You choose which reminders use it (any of 30 / 20 / 10 / 5 minutes, and optionally spoken task reminders). The others stay as normal spoken reminders.
+- Acknowledging stops the alarm for that reminder only. The next scheduled reminder (e.g. 20 minutes) still sounds, and the banner stays for Snooze / Dismiss / Join.
+- Repeats stop by themselves when the meeting ends (task alerts: one hour after the due time). After sleep or a restart, an unacknowledged alert is not replayed.
+- **Mute** silences the alarm and voice, but the flashing alert still appears.
+- How loud the alarm is also depends on the Windows volume and your speakers.
+
+### Optional external vibration
+
+The app does **not** assume your computer can vibrate (Windows PCs normally can't). If none of these options is set up, nothing is attempted. You can use either or both:
+
+**A. A game controller** (Xbox One / Series or another XInput-compatible controller, USB or Bluetooth)
+1. Connect the controller to the PC and **press any button on it once**. Windows only shows a controller to apps after it has been used.
+2. In Settings, tick **Vibrate a game controller** and click **Test controller**.
+3. Keep the controller where you'll feel it (in your lap or on the desk). It buzzes 3 times with each attention alert.
+
+**B. Your phone or smartwatch, using an urgent push notification**
+1. Install the free **ntfy** app on your phone (Android or iPhone). In the app, subscribe to a topic with a long, hard-to-guess name, e.g. `ead-alerts-7Fq29xKp`. Set the topic's notifications to vibrate. A paired smartwatch will vibrate too if it mirrors phone notifications.
+2. In Settings choose **ntfy app**, enter `https://ntfy.sh/ead-alerts-7Fq29xKp` (your topic name), tick **Send an urgent push**, and click **Test push**.
+3. Privacy: the meeting title is sent to the service. Anyone who knows a topic name on the public ntfy.sh server can read it, so keep the name secret, or run your own ntfy server.
+
+**Other services/devices:** choose **Other service (JSON web request)**. The app POSTs JSON to your address on each alert:
+
+```json
+{ "app": "Executive Assistant Desk", "event": "reminder", "kind": "meeting",
+  "title": "Board chair call", "message": "Reminder: Board chair call starts in 30 minutes.",
+  "startsAt": "2026-10-21T11:18:00.000Z", "vibrate": true }
+```
+
+Repeats are sent with `"event": "reminder-repeat"`. You can point this at Home Assistant, Pushover, IFTTT, Zapier, a vibrating pager or wristband with a web hook, or your own device.
+
+---
+
 ## How to use
 
 | Action | How |
@@ -50,6 +99,7 @@ A Windows desktop app for managing an Executive Director's meetings and daily ta
 | Join | **Join** opens the meeting link in your browser. |
 | Snooze / dismiss | When a reminder plays, a yellow banner appears at the top: **Snooze** (length set in Settings) or **Dismiss** (no further reminders for that meeting). Clicking the Windows notification opens the app on that banner. |
 | Mute | 🔊 button in the top bar, the tray menu, or Settings. Notifications still appear while muted. |
+| Acknowledge | In attention mode, the big yellow **Acknowledge** button on the flashing alert (or the red one on the dashboard banner) stops the alarm repeating. |
 | Tasks | **+ Add task**. Tick the checkbox to complete; untick or press **Reopen** to reopen. Tick *Speak a reminder* (needs a due time) for a spoken task reminder. |
 
 **Dashboard:** clocks at the top; then any active or missed reminders; then *Today's meetings* (and the next few coming up) on the left and the *Daily checklist* on the right (overdue tasks, tasks due today, and tasks completed today). Unfinished tasks stay in **Overdue** until they are completed.
@@ -73,7 +123,7 @@ On Windows (recommended), with [Node.js 22 LTS](https://nodejs.org) installed, o
 npm ci
 npm test              # unit tests
 npm run test:e2e      # drives the real app end to end
-npm run dist:win      # creates dist\Executive-Assistant-Desk-Setup-1.0.0.exe
+npm run dist:win      # creates dist\Executive-Assistant-Desk-Setup-1.1.0.exe
 ```
 
 To run without installing: `npm start`.
@@ -86,7 +136,7 @@ On Linux the same `npm run dist:win` works if Wine is installed (`sudo apt insta
 
 ## Verification
 
-`npm test` (30 unit tests, `test/`) and `npm run test:e2e` (the real app, `test/e2e/run-e2e.js`) check:
+`npm test` (40 unit tests, `test/`) and `npm run test:e2e` (the real app, `test/e2e/run-e2e.js`) check:
 
 | Area | What is checked |
 | --- | --- |
@@ -97,6 +147,7 @@ On Linux the same `npm run dist:win` works if Wine is installed (`sudo apt insta
 | Sleep / restart | Expired reminders are listed as missed, never spoken; the next reminder still plays on time; an outdated on-screen reminder is cleared. |
 | Completion tracking | Checkbox completes, Reopen reopens, completed timestamp recorded, overdue tasks stay visible until done, "x of y done today" progress. |
 | Edits | Rescheduling recalculates reminders; title-only edits don't replay; cancel stops reminders; restore only uses future reminders. |
+| Attention mode | The Test button plays the alarm, then the voice, shows the flashing on-top alert, sends the vibration push, and repeats every 20 s until acknowledged. Meeting alerts repeat on the chosen interval with updated wording ("starts in 29 minutes"). Acknowledge (from the alert or the dashboard) stops repeats and keeps the banner. Only the chosen reminder times use it. Repeats stop at the meeting end, after sleep, or when the mode is turned off. A new scheduled reminder replaces a repeating one, so you never get two alarms at once. Snooze and dismiss also stop it. Mute silences sound but still shows the alert. |
 
 The end-to-end test moves the app's internal clock forward (a test-only switch, `EAD_TEST=1`) so it can show reminders firing without waiting 30 minutes.
 
@@ -110,4 +161,7 @@ src/main/store.js       local JSON storage (%APPDATA%\Executive Assistant Desk\d
 src/shared/tz.js        time-zone conversion and DST handling (built-in Intl/ICU data)
 src/shared/tasks.js     overdue / today / upcoming / completed
 src/renderer/           the interface (HTML/CSS/JS) and the speech queue
+src/renderer/alarm.js   alarm tones (Web Audio, no sound files)
+src/renderer/attention.* the flashing always-on-top alert window
+src/renderer/vibrate.js game-controller vibration (Gamepad API)
 ```
