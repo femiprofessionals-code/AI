@@ -7,59 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const DEFAULT_SETTINGS = {
-  voiceName: '',
-  volume: 0.9,
-  rate: 1,
-  muted: false,
-  speechEngine: 'browser', // 'browser' (Chromium speech) or 'windows' (PowerShell System.Speech)
-  notifications: true,
-  openAtLogin: false,
-  startHidden: true,
-  snoozeMinutes: 5,
-  trayHintShown: false,
-  // Attention mode: loud alarm, then the spoken reminder, repeated until acknowledged.
-  attentionEnabled: false,
-  attentionOffsets: [30, 20, 10, 5],
-  attentionTasks: true,
-  alarmSound: 'siren', // 'siren' | 'beeps' | 'bell'
-  alarmVolume: 1,
-  alarmSeconds: 4,
-  repeatSeconds: 60,
-  flashing: true,
-  // Optional external vibration (the computer itself is never assumed to vibrate).
-  vibrateGamepad: false,
-  webhookEnabled: false,
-  webhookType: 'ntfy', // 'ntfy' (phone/watch via the ntfy app) | 'json' (any service accepting a JSON POST)
-  webhookUrl: '',
-};
-
-function emptyData() {
-  return {
-    version: 1,
-    meetings: [],
-    tasks: [],
-    settings: { ...DEFAULT_SETTINGS },
-    reminders: { fired: {}, dismissed: {}, snoozes: [], missed: [], active: [] },
-  };
-}
-
-function normalize(raw) {
-  const d = emptyData();
-  if (!raw || typeof raw !== 'object') return d;
-  d.meetings = Array.isArray(raw.meetings) ? raw.meetings : [];
-  d.tasks = Array.isArray(raw.tasks) ? raw.tasks : [];
-  d.settings = { ...DEFAULT_SETTINGS, ...(raw.settings || {}) };
-  const r = raw.reminders || {};
-  d.reminders = {
-    fired: r.fired && typeof r.fired === 'object' ? r.fired : {},
-    dismissed: r.dismissed && typeof r.dismissed === 'object' ? r.dismissed : {},
-    snoozes: Array.isArray(r.snoozes) ? r.snoozes : [],
-    missed: Array.isArray(r.missed) ? r.missed : [],
-    active: Array.isArray(r.active) ? r.active : [],
-  };
-  return d;
-}
+const { DEFAULT_SETTINGS, emptyData, normalize } = require('../shared/data');
 
 class Store {
   constructor(dir) {

@@ -1,4 +1,4 @@
-name: Executive Assistant Desk (Windows build)
+name: Executive Assistant Desk (Windows + Android builds)
 
 on:
   push:
@@ -21,7 +21,16 @@ jobs:
           cache: npm
           cache-dependency-path: executive-assistant-desk/package-lock.json
       - run: npm ci
-      - name: Unit tests (time zones, DST, reminder timing, saving, tasks)
+      - name: Use the Firebase project from repository secrets (if set)
+        shell: bash
+        env:
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+        run: |
+          if [ -n "$FIREBASE_API_KEY" ] && [ -n "$FIREBASE_PROJECT_ID" ]; then
+            printf '{ "apiKey": "%s", "projectId": "%s" }\n' "$FIREBASE_API_KEY" "$FIREBASE_PROJECT_ID" > src/shared/sync-config.json
+          fi
+      - name: Unit tests (time zones, DST, reminder timing, attention mode, saving, tasks)
         run: npm test
       - name: End-to-end test of the real app on Windows
         run: npm run test:e2e -- e2e-screenshots
@@ -38,3 +47,88 @@ jobs:
           name: e2e-screenshots
           path: executive-assistant-desk/e2e-screenshots
           if-no-files-found: ignore
+
+  sync:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: executive-assistant-desk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            executive-assistant-desk/package-lock.json
+            executive-assistant-desk/mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npm ci
+        working-directory: executive-assistant-desk/mobile
+      - run: npm run build:www
+        working-directory: executive-assistant-desk/mobile
+      - name: Sync tests against the Firebase emulators
+        run: npm run test:sync
+      - name: Desktop app + phone app syncing end to end
+        run: xvfb-run -a npm run test:sync-e2e
+
+  android:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: executive-assistant-desk/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: executive-assistant-desk/mobile/package-lock.json
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - name: Use the Firebase project from repository secrets (if set)
+        env:
+          FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+        run: |
+          if [ -n "$FIREBASE_API_KEY" ] && [ -n "$FIREBASE_PROJECT_ID" ]; then
+            printf '{ "apiKey": "%s", "projectId": "%s" }\n' "$FIREBASE_API_KEY" "$FIREBASE_PROJECT_ID" > ../src/shared/sync-config.json
+          fi
+      - name: Build the app's web part and copy it into the Android project
+        run: npm run build
+      - name: Optional signing key from repository secrets
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ]; then
+            echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.keystore"
+            echo "ANDROID_KEYSTORE_FILE=$RUNNER_TEMP/release.keystore" >> "$GITHUB_ENV"
+          fi
+      - name: Build APK
+        working-directory: executive-assistant-desk/mobile/android
+        env:
+          ANDROID_VERSION_CODE: ${{ github.run_number }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          if [ -n "$ANDROID_KEYSTORE_FILE" ]; then
+            ./gradlew --no-daemon assembleRelease
+            cp app/build/outputs/apk/release/app-release.apk ../Executive-Assistant-Desk.apk
+          else
+            ./gradlew --no-daemon assembleDebug
+            cp app/build/outputs/apk/debug/app-debug.apk ../Executive-Assistant-Desk.apk
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Executive-Assistant-Desk-Android
+          path: executive-assistant-desk/mobile/Executive-Assistant-Desk.apk
+          if-no-files-found: error

@@ -64,14 +64,14 @@ function sample(x, y) {
   return NAVY;
 }
 
-function render(size) {
+function render(size, sampler = sample) {
   const ss = 4;
   const buf = Buffer.alloc(size * size * 4);
   for (let py = 0; py < size; py++) {
     for (let px = 0; px < size; px++) {
       let r = 0, g = 0, b = 0, a = 0;
       for (let sy = 0; sy < ss; sy++) for (let sx = 0; sx < ss; sx++) {
-        const c = sample((px + (sx + 0.5) / ss) / size, (py + (sy + 0.5) / ss) / size);
+        const c = sampler((px + (sx + 0.5) / ss) / size, (py + (sy + 0.5) / ss) / size);
         if (c) { r += c[0]; g += c[1]; b += c[2]; a += 1; }
       }
       const i = (py * size + px) * 4;
@@ -81,6 +81,9 @@ function render(size) {
   }
   return png(size, buf);
 }
+
+module.exports = { render, sample };
+if (require.main !== module) return;
 
 const root = path.join(__dirname, '..');
 fs.writeFileSync(path.join(root, 'build', 'icon.png'), render(256));

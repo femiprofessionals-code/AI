@@ -83,7 +83,7 @@
     }
 
     speak(text, s) {
-      if (s.speechEngine === 'windows') {
+      if (s.speechEngine === 'windows' || window.desk.platform === 'android') {
         return window.desk.speakNative(text).then((ok) => { if (!ok) throw new Error('Windows speech failed'); });
       }
       return new Promise((resolve, reject) => {

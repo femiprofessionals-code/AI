@@ -1,0 +1,14 @@
+{
+  "appId": "com.executiveassistantdesk.mobile",
+  "appName": "Executive Assistant Desk",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "smallIcon": "ic_stat_notify",
+      "iconColor": "#1F3A68"
+    }
+  }
+}

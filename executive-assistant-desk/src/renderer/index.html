@@ -22,6 +22,7 @@
       <button class="btn primary" id="btn-add-meeting">+ Add meeting</button>
       <button class="btn primary" id="btn-add-task">+ Add task</button>
       <button class="btn icon" id="btn-mute" title="Mute or unmute spoken reminders"></button>
+      <button class="btn icon sync-pill" id="btn-sync" title="Account and sync"></button>
     </div>
   </header>
 
@@ -84,6 +85,43 @@
 
     <!-- Settings -->
     <section class="view" id="view-settings">
+      <div class="panel account-panel" id="account-panel">
+        <div class="panel-head">
+          <h2>Account &amp; sync</h2>
+          <span class="muted" id="sync-summary"></span>
+        </div>
+        <p class="muted">Sign in with the same email on this computer and on your Android phone. Everything is kept on each device, so both keep working offline (even when the other one is switched off), and changes are exchanged automatically whenever they are online.</p>
+
+        <div id="sync-setup" hidden>
+          <p class="warn-text">Sync needs a one-time setup of your free Firebase project (see the README, “Set up sync”). Paste its details here:</p>
+          <div class="row3">
+            <label class="field"><span>Project ID</span><input id="sync-project" placeholder="executive-assistant-desk-1234"></label>
+            <label class="field"><span>Web API key</span><input id="sync-apikey" placeholder="AIza…"></label>
+            <div class="field"><span>&nbsp;</span><button class="btn primary" id="btn-sync-config">Save</button></div>
+          </div>
+        </div>
+
+        <form id="sync-login" hidden autocomplete="on" novalidate>
+          <div class="row3">
+            <label class="field"><span>Email</span><input type="email" id="sync-email" autocomplete="username" placeholder="you@example.com"></label>
+            <label class="field"><span>Password</span><input type="password" id="sync-password" autocomplete="current-password" placeholder="at least 6 characters"></label>
+            <div class="field"><span>&nbsp;</span>
+              <div class="row"><button class="btn primary" id="btn-sign-in" type="submit">Sign in</button><button class="btn" id="btn-sign-up" type="button">Create account</button></div>
+            </div>
+          </div>
+          <button class="btn small" type="button" id="btn-reset-pw">Forgot password?</button>
+          <p class="error" id="sync-error"></p>
+        </form>
+
+        <div id="sync-account" hidden>
+          <p><strong id="sync-who"></strong></p>
+          <p class="muted" id="sync-detail"></p>
+          <div class="row">
+            <button class="btn primary" id="btn-sync-now">Sync now</button>
+            <button class="btn" id="btn-sign-out">Sign out</button>
+          </div>
+        </div>
+      </div>
       <div class="panel attention-panel">
         <div class="panel-head">
           <h2>Attention mode</h2>
@@ -124,7 +162,13 @@
             <div class="row"><button class="btn" id="btn-test-alarm">Test alarm sound</button><button class="btn" id="btn-stop-alarm">Stop</button></div>
             <p class="muted small">The alarm volume is relative to the Windows volume. “Mute” in the top bar silences the alarm and voice; the flashing alert still appears.</p>
           </div>
-          <div>
+          <div class="mobile-only">
+            <div class="field-label">Vibration</div>
+            <label class="check"><input type="checkbox" id="set-phone-vibrate"> Vibrate this phone with attention alerts</label>
+            <div class="row"><button class="btn small" id="btn-test-phone-vibrate">Test vibration</button></div>
+            <p class="muted small">When the app is closed, attention alerts use the “Attention alerts (alarm)” notification sound and vibration. You can change that sound in Android Settings → Apps → Executive Assistant Desk → Notifications.</p>
+          </div>
+          <div class="desktop-only">
             <div class="field-label">External vibration (optional)</div>
             <p class="muted small">Computers don't vibrate, so nothing here is required. Connect one of these if you want a physical buzz:</p>
             <label class="check"><input type="checkbox" id="set-gamepad"> Vibrate a game controller (Xbox-compatible, USB or Bluetooth)</label>
@@ -146,7 +190,7 @@
         <div class="panel">
           <h2>Spoken reminders</h2>
           <p class="muted">Meetings are announced 30, 20, 10 and 5 minutes before they start, together with a Windows notification.</p>
-          <label class="field"><span>Speech engine</span>
+          <label class="field desktop-only"><span>Speech engine</span>
             <select id="set-engine">
               <option value="browser">Built-in voices (recommended)</option>
               <option value="windows">Windows speech (PowerShell)</option>
@@ -167,7 +211,15 @@
             <span class="muted" id="voice-status"></span>
           </div>
         </div>
-        <div class="panel">
+        <div class="panel mobile-only">
+          <h2>Phone</h2>
+          <p><span id="phone-notif-status"></span> <button class="btn small" id="btn-phone-notif">Allow notifications</button></p>
+          <p><span id="phone-exact-status"></span> <button class="btn small" id="btn-phone-exact">Allow exact timing</button></p>
+          <p class="muted small">Reminders are scheduled as Android notifications, so they arrive even when the app is closed. For on-time reminders, also set Android Settings → Apps → Executive Assistant Desk → Battery → <strong>Unrestricted</strong>. Spoken reminders play when the app is open; when it is closed you get the notification sound and vibration.</p>
+          <h2>About</h2>
+          <p class="muted" id="about-mobile"></p>
+        </div>
+        <div class="panel desktop-only">
           <h2>Windows</h2>
           <label class="check"><input type="checkbox" id="set-notifications"> Show Windows desktop notifications</label>
           <label class="check"><input type="checkbox" id="set-login"> Start automatically when I sign in to Windows</label>
@@ -252,6 +304,9 @@
   </dialog>
 
   <div id="toast" class="toast" role="status"></div>
+
+  <!-- Android: full-screen attention alert (the desktop uses a separate always-on-top window) -->
+  <div id="attention-overlay" class="attention-overlay" hidden role="alertdialog" aria-live="assertive" aria-label="Reminder"></div>
 
   <script src="../shared/tz.js"></script>
   <script src="../shared/tasks.js"></script>

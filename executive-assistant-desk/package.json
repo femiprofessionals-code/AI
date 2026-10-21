@@ -1,7 +1,7 @@
 {
   "name": "executive-assistant-desk",
   "productName": "Executive Assistant Desk",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Meetings, spoken reminders, three time-zone clocks and daily tasks for an Executive Director's assistant.",
   "main": "src/main/main.js",
   "author": "Executive Assistant Desk",
@@ -13,11 +13,14 @@
     "test:e2e": "node test/e2e/run-e2e.js",
     "icons": "node scripts/make-icons.js",
     "dist:win": "electron-builder --win nsis --x64 --publish never",
-    "dist:dir": "electron-builder --win dir --x64 --publish never"
+    "dist:dir": "electron-builder --win dir --x64 --publish never",
+    "test:sync": "firebase emulators:exec --config firebase/firebase.json --only auth,firestore --project demo-ead \"node --test test/sync/sync.emulator.test.js\"",
+    "test:sync-e2e": "firebase emulators:exec --config firebase/firebase.json --only auth,firestore --project demo-ead \"node test/e2e/run-sync-e2e.js\""
   },
   "devDependencies": {
     "electron": "^38.8.6",
     "electron-builder": "^26.15.3",
+    "firebase-tools": "^14.27.0",
     "playwright-core": "^1.64.1"
   },
   "build": {

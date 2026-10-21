@@ -27,7 +27,13 @@ async function launch(extraEnv = {}) {
     args: [...(process.platform === 'linux' ? ['--no-sandbox'] : []), ...(process.env.EAD_E2E_EXE ? [] : [ROOT])],
     env: { ...process.env, EAD_TEST: '1', EAD_USER_DATA: USER_DATA, ...extraEnv },
   });
-  const page = await app.firstWindow();
+  // The app has two windows (main + attention alert); pick the main one by its page.
+  let page = null;
+  for (let i = 0; i < 100 && !page; i++) {
+    page = app.windows().find((w) => w.url().endsWith('/index.html')) || null;
+    if (!page) await new Promise((r) => setTimeout(r, 200));
+  }
+  if (!page) throw new Error('main window did not open');
   await page.waitForSelector('body[data-ready="1"]', { timeout: 20000 });
   await page.setViewportSize({ width: 1320, height: 900 }).catch(() => {});
   return { app, page };

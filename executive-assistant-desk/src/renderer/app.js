@@ -5,6 +5,8 @@
   const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
   const MINUTE = 60000;
   const LOCAL_ZONE = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const IS_PHONE = desk.platform === 'android';
+  if (IS_PHONE) document.body.classList.add('mobile');
 
   let S = null; // latest state from the main process
   const now = () => Date.now() + (S ? S.clockOffset : 0);
@@ -65,7 +67,7 @@
   function buildClocks() {
     $('#clocks').innerHTML = TZ.ZONES.map((z) => `
       <div class="clock" data-zone="${z.id}">
-        <div class="clock-label">${esc(z.label)}${z.id === LOCAL_ZONE ? ' <span class="chip">This computer</span>' : ''}</div>
+        <div class="clock-label">${esc(IS_PHONE ? z.short : z.label)}${z.id === LOCAL_ZONE ? ' <span class="chip">This computer</span>' : ''}</div>
         <div class="clock-time" data-part="time"></div>
         <div class="clock-date" data-part="date"></div>
         <div class="clock-meta" data-part="meta"></div>
@@ -77,13 +79,15 @@
     const localDate = TZ.dateIn(t, LOCAL_ZONE);
     for (const el of $$('.clock')) {
       const zone = el.dataset.zone;
-      $('[data-part=time]', el).textContent = TZ.formatTime12(t, zone, true);
+      $('[data-part=time]', el).textContent = TZ.formatTime12(t, zone, !IS_PHONE);
       const shift = TZ.dayDiff(localDate, TZ.dateIn(t, zone));
-      $('[data-part=date]', el).innerHTML = esc(TZ.formatDateLong(t, zone)) +
+      $('[data-part=date]', el).innerHTML = esc(IS_PHONE ? TZ.formatDateShort(t, zone) : TZ.formatDateLong(t, zone)) +
         (shift ? ` <span class="badge daydiff">${esc(TZ.dayShiftLabel(shift))}</span>` : '');
       const dst = TZ.isDst(t, zone);
       const observes = TZ.offsetMinutes(Date.UTC(new Date(t).getUTCFullYear(), 0, 1), zone) !== TZ.offsetMinutes(Date.UTC(new Date(t).getUTCFullYear(), 6, 1), zone);
-      $('[data-part=meta]', el).textContent = `${TZ.abbreviation(t, zone)} · ${TZ.formatOffset(TZ.offsetMinutes(t, zone))} · ${observes ? (dst ? 'Daylight saving time' : 'Standard time') : 'No daylight saving'}`;
+      $('[data-part=meta]', el).textContent = IS_PHONE
+        ? `${TZ.abbreviation(t, zone)} · ${TZ.formatOffset(TZ.offsetMinutes(t, zone))}`
+        : `${TZ.abbreviation(t, zone)} · ${TZ.formatOffset(TZ.offsetMinutes(t, zone))} · ${observes ? (dst ? 'Daylight saving time' : 'Standard time') : 'No daylight saving'}`;
     }
   }
 
@@ -281,7 +285,7 @@
         names.map((n) => `<option value="${esc(n)}">${esc(n)}</option>`).join('');
       sel.value = names.includes(s.voiceName) ? s.voiceName : '';
     };
-    if (s.speechEngine === 'windows') {
+    if (s.speechEngine === 'windows' || IS_PHONE) {
       desk.nativeVoices().then(fill).catch(() => fill([]));
     } else {
       const voices = speech.voices.slice().sort((a, b) => (b.lang.startsWith('en') - a.lang.startsWith('en')) || a.name.localeCompare(b.name));
@@ -303,9 +307,11 @@
     $('#set-login').checked = s.openAtLogin;
     $('#set-hidden').checked = s.startHidden;
     $('#login-note').textContent = S.isPackaged ? '' : 'Note: automatic start only takes effect in the installed app, not in development mode.';
-    $('#about').textContent = `Version ${S.version}. Your data is saved on this computer only.`;
+    $('#about').textContent = `Version ${S.version}. Your data is saved on this computer${S.sync && S.sync.signedIn ? ' and synced to your account' : ' only'}.`;
+    $('#about-mobile').textContent = `Version ${S.version}. Your data is saved on this phone${S.sync && S.sync.signedIn ? ' and synced to your account' : ' only'}.`;
+    $('#set-phone-vibrate').checked = s.phoneVibrate;
     const mute = $('#btn-mute');
-    mute.textContent = s.muted ? '🔇 Muted' : '🔊 Voice on';
+    mute.textContent = IS_PHONE ? (s.muted ? '🔇' : '🔊') : s.muted ? '🔇 Muted' : '🔊 Voice on';
     mute.classList.toggle('muted-on', s.muted);
     if (document.activeElement !== $('#set-voice')) renderVoices();
 
@@ -323,7 +329,20 @@
     $('#set-webhook').checked = s.webhookEnabled;
     $('#set-webhook-type').value = s.webhookType;
     if (document.activeElement !== $('#set-webhook-url')) $('#set-webhook-url').value = s.webhookUrl;
-    renderGamepadStatus();
+    if (!IS_PHONE) renderGamepadStatus();
+    else renderPhoneStatus();
+  }
+
+  async function renderPhoneStatus() {
+    try {
+      const p = await desk.phoneStatus();
+      const ok = p.notifications === 'granted';
+      $('#phone-notif-status').textContent = ok ? '✅ Notifications allowed.' : '⚠ Notifications are off — reminders cannot appear when the app is closed.';
+      $('#btn-phone-notif').hidden = ok;
+      const exact = p.exactAlarm === 'granted';
+      $('#phone-exact-status').textContent = exact ? '✅ Exact reminder timing allowed.' : '⚠ Exact timing is off — Android may deliver reminders a few minutes late.';
+      $('#btn-phone-exact').hidden = exact;
+    } catch (_) { /* not available */ }
   }
 
   function renderGamepadStatus() {
@@ -334,8 +353,111 @@
       : vib.length ? `Ready: ${vib.map((p) => p.name.replace(/\s*\(.*$/, '')).join(', ')}` : 'Controller found, but it does not support vibration.';
   }
 
+  /* ---------------- Account & sync ---------------- */
+  function syncText(st) {
+    if (!st.configured) return { pill: '☁ Set up sync', cls: 'off' };
+    if (!st.signedIn) return { pill: '☁ Sign in to sync', cls: 'off' };
+    if (st.syncing) return { pill: '⟳ Syncing…', cls: 'busy' };
+    if (st.lastError) return { pill: st.pending ? `⚠ Offline · ${st.pending} waiting` : '⚠ Not synced', cls: 'warn' };
+    if (st.pending) return { pill: `⟳ ${st.pending} to upload`, cls: 'busy' };
+    return { pill: '☁ Synced', cls: 'ok' };
+  }
+
+  function renderSync() {
+    const st = S.sync || { configured: false };
+    const t = syncText(st);
+    const pill = $('#btn-sync');
+    pill.textContent = IS_PHONE ? t.pill.split(' ·')[0].replace('Sign in to sync', 'Sign in').replace('Set up sync', 'Sync') : t.pill;
+    pill.title = t.pill;
+    pill.className = 'btn icon sync-pill ' + t.cls;
+    $('#sync-setup').hidden = st.configured;
+    $('#sync-login').hidden = !st.configured || st.signedIn;
+    $('#sync-account').hidden = !st.signedIn;
+    $('#sync-summary').textContent = st.signedIn ? t.pill : '';
+    if (st.signedIn) {
+      $('#sync-who').textContent = `Signed in as ${st.email}`;
+      const when = st.lastSyncAt ? `Last synced ${relative(st.lastSyncAt - Date.now())}.` : 'Not synced yet.';
+      const pending = st.pending ? ` ${st.pending} change${st.pending > 1 ? 's' : ''} waiting to upload.` : '';
+      $('#sync-detail').textContent = when + pending + (st.lastError ? ` Last problem: ${st.lastError}` : '');
+    } else if (st.lastError && !$('#sync-error').textContent) {
+      $('#sync-error').textContent = st.lastError;
+    }
+  }
+
+  async function syncAuth(create) {
+    const email = $('#sync-email').value.trim();
+    const pw = $('#sync-password').value;
+    $('#sync-error').textContent = '';
+    if (!email) { $('#sync-error').textContent = 'Enter your email.'; return; }
+    const btns = [$('#btn-sign-in'), $('#btn-sign-up')];
+    btns.forEach((b) => { b.disabled = true; });
+    try {
+      await desk.syncSignIn(email, pw, create);
+      $('#sync-password').value = '';
+      toast(create ? 'Account created. This device is now syncing.' : 'Signed in. Your meetings and tasks are syncing.');
+    } catch (e) {
+      $('#sync-error').textContent = e.message;
+    } finally {
+      btns.forEach((b) => { b.disabled = false; });
+    }
+  }
+
+  function bindSync() {
+    $('#btn-sync').addEventListener('click', () => { showView('settings'); $('#account-panel').scrollIntoView({ behavior: 'smooth' }); });
+    $('#sync-login').addEventListener('submit', (e) => { e.preventDefault(); syncAuth(false); });
+    $('#btn-sign-up').addEventListener('click', () => syncAuth(true));
+    $('#btn-reset-pw').addEventListener('click', async () => {
+      const email = $('#sync-email').value.trim();
+      if (!email) { $('#sync-error').textContent = 'Enter your email first, then press “Forgot password?”.'; return; }
+      try {
+        await desk.syncResetPassword(email);
+        $('#sync-error').textContent = '';
+        toast('Password reset email sent. Check your inbox.');
+      } catch (e) { $('#sync-error').textContent = e.message; }
+    });
+    $('#btn-sync-now').addEventListener('click', () => act(() => desk.syncNow(), 'Synced.').catch(() => {}));
+    $('#btn-sign-out').addEventListener('click', async () => {
+      if (await confirmBox('Sign out? Your meetings and tasks stay on this device, but stop syncing.', 'Sign out')) {
+        await act(() => desk.syncSignOut(), 'Signed out.');
+      }
+    });
+    $('#btn-sync-config').addEventListener('click', () => act(() => desk.syncSetConfig({
+      projectId: $('#sync-project').value, apiKey: $('#sync-apikey').value,
+    }), 'Saved. Now sign in with your email.'));
+  }
+
+  /* ---------------- Android full-screen attention alert ---------------- */
+  function renderAttentionOverlay() {
+    if (!IS_PHONE) return;
+    const box = $('#attention-overlay');
+    const list = S.reminders.active.filter((x) => x.needsAck).sort((a, b) => a.startUtc - b.startUtc);
+    box.hidden = !list.length;
+    box.classList.toggle('flash', list.length > 0 && S.settings.flashing);
+    if (!list.length) { box.innerHTML = ''; return; }
+    box.innerHTML = '<div class="ov-head">⚠ REMINDER</div>' + list.map((a) => {
+      const meeting = a.kind === 'meeting' ? S.meetings.find((m) => m.id === a.refId) : null;
+      const mins = Math.round((a.startUtc - now()) / MINUTE);
+      const when = mins > 0 ? `${a.kind === 'task' ? 'Due' : 'Starts'} in ${mins} min` : mins === 0 ? 'Now' : `${-mins} min ago`;
+      const zones = a.kind === 'task' ? '' : TZ.equivalents(a.startUtc, meeting ? meeting.timeZone : 'Africa/Lagos')
+        .map((e) => `${esc(e.short)} ${esc(e.time12)}${e.dayShift ? ` (${esc(e.dateShort)})` : ''}`).join('<br>');
+      return `<section class="ov-item">
+        <div class="ov-title">${a.kind === 'test' ? 'TEST — ' : ''}${esc(a.title)}</div>
+        <div class="ov-when">${esc(when)}</div>
+        ${zones ? `<div class="ov-zones">${zones}</div>` : ''}
+        <button class="ov-ack" data-act="acknowledge" data-instance="${esc(a.instance)}">Acknowledge</button>
+        <div class="ov-row">
+          ${meeting && meeting.link ? `<button data-act="join" data-id="${meeting.id}">Join</button>` : ''}
+          <button data-act="snooze" data-instance="${esc(a.instance)}">Snooze ${S.settings.snoozeMinutes} min</button>
+          <button data-act="dismiss" data-instance="${esc(a.instance)}">Dismiss</button>
+        </div>
+      </section>`;
+    }).join('');
+  }
+
   function renderAll() {
     if (!S) return;
+    renderSync();
+    renderAttentionOverlay();
     tickClocks();
     renderAlerts();
     renderMeetings();
@@ -565,6 +687,10 @@
       window.Alarm.play({ sound: $('#set-alarm-sound').value, volume: Number($('#set-alarm-volume').value), seconds: Number($('#set-alarm-seconds').value) });
     });
     $('#btn-stop-alarm').addEventListener('click', () => window.Alarm.stop());
+    $('#set-phone-vibrate').addEventListener('change', (e) => set({ phoneVibrate: e.target.checked }));
+    $('#btn-test-phone-vibrate').addEventListener('click', () => desk.testVibration && desk.testVibration());
+    $('#btn-phone-notif').addEventListener('click', () => desk.requestNotifications().then(renderPhoneStatus));
+    $('#btn-phone-exact').addEventListener('click', () => desk.openExactAlarmSettings().then(renderPhoneStatus));
     $('#btn-test-attention').addEventListener('click', () => act(() => desk.testAttention(), 'Test alert started. Press Acknowledge to stop it.'));
 
     // External vibration
@@ -596,6 +722,10 @@
   }
 
   async function init() {
+    if (IS_PHONE) {
+      $('#btn-add-meeting').textContent = '+ Meeting';
+      $('#btn-add-task').textContent = '+ Task';
+    }
     buildClocks();
     tickClocks();
     document.addEventListener('click', onClick);
@@ -611,6 +741,7 @@
     $('#task-form').addEventListener('change', updateTaskSpeak);
     for (const b of $$('[data-close]')) b.addEventListener('click', () => b.closest('dialog').close());
     bindSettings();
+    bindSync();
 
     desk.onState((st) => { S = st; renderAll(); });
     desk.onAnnounce((a) => speech.enqueue({ key: a.key, text: a.text, alarm: !!a.attention, instance: a.instance }));
@@ -622,7 +753,7 @@
 
     // Clocks every second; relative times and task status every 30 s.
     setInterval(tickClocks, 1000);
-    setInterval(() => { renderMeetings(); renderTasks(); renderAlerts(); }, 30000);
+    setInterval(() => { renderMeetings(); renderTasks(); renderAlerts(); renderAttentionOverlay(); }, 30000);
   }
 
   init();

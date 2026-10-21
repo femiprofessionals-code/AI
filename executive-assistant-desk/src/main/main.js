@@ -1,10 +1,14 @@
-const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, shell, powerMonitor, nativeImage, screen } = require('electron');
+const { app, BrowserWindow, Tray, Menu, Notification, ipcMain, shell, powerMonitor, nativeImage, screen, safeStorage } = require('electron');
+const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 const { Store } = require('./store');
 const Scheduler = require('./scheduler');
 const Model = require('./model');
 const TZ = require('../shared/tz');
+const { FirebaseClient, SyncEngine } = require('../shared/sync');
+const BUILD_SYNC_CONFIG = require('../shared/sync-config.json');
+const { applySettings, webhookUrlValid } = require('../shared/data');
 
 const APP_ID = 'com.executiveassistantdesk.app';
 const IS_TEST = process.env.EAD_TEST === '1';
@@ -107,7 +111,9 @@ function createAttentionWindow() {
     // Closing the alert counts as acknowledging it.
     e.preventDefault();
     silence(null);
+    recordAlert(null, 'ack');
     Scheduler.acknowledge(store.data, null);
+    syncSoon();
     store.save();
     broadcast();
   });
@@ -141,12 +147,6 @@ function syncAttention() {
 }
 
 /* ---------- Optional external vibration via push (phone / smartwatch) ---------- */
-function webhookUrlValid(url) {
-  try {
-    const u = new URL(url);
-    return u.protocol === 'https:' || u.protocol === 'http:';
-  } catch (_) { return false; }
-}
 
 async function sendWebhook(alert, settings) {
   const s = settings || store.data.settings;
@@ -211,6 +211,92 @@ function notify(title, body, onClick, persistent) {
   n.show();
 }
 
+/* ---------- Cloud sync (Firebase) ---------- */
+const SYNC_INTERVAL_MS = 60 * 1000;
+const SYNC_INTERVAL_ALERT_MS = 15 * 1000; // faster while an alert waits, so Acknowledge on the phone stops it here
+let syncEngine = null;
+let syncTimer = null;
+let syncSoonTimer = null;
+const sessionFile = () => path.join(app.getPath('userData'), 'session.bin');
+
+function syncConfig() {
+  const s = store.data.settings;
+  const cfg = {
+    apiKey: BUILD_SYNC_CONFIG.apiKey || s.syncApiKey,
+    projectId: BUILD_SYNC_CONFIG.projectId || s.syncProjectId,
+  };
+  if (IS_TEST && process.env.EAD_SYNC_EMULATOR) {
+    const [auth, firestore] = process.env.EAD_SYNC_EMULATOR.split(',');
+    return { apiKey: 'emulator-key', projectId: process.env.EAD_SYNC_PROJECT || 'demo-ead', emulator: { auth, firestore } };
+  }
+  return cfg;
+}
+
+// The sign-in is kept in its own file, encrypted with Windows' protection for the current user (DPAPI).
+function loadSession() {
+  try {
+    const buf = fs.readFileSync(sessionFile());
+    const json = safeStorage.isEncryptionAvailable() && buf[0] !== 0x7b ? safeStorage.decryptString(buf) : buf.toString('utf8');
+    return JSON.parse(json);
+  } catch (_) { return null; }
+}
+
+function saveSession(session) {
+  try {
+    if (!session) { fs.rmSync(sessionFile(), { force: true }); return; }
+    const json = JSON.stringify(session);
+    fs.writeFileSync(sessionFile(), safeStorage.isEncryptionAvailable() ? safeStorage.encryptString(json) : json);
+  } catch (e) { console.error('Could not save sign-in:', e.message); }
+}
+
+function createSyncEngine() {
+  syncEngine = new SyncEngine({
+    data: () => store.data,
+    client: new FirebaseClient(syncConfig()),
+    loadSession,
+    saveSession,
+    persist: () => store.save(),
+    onRemoteChange: applyRemoteChanges,
+  });
+}
+
+/** React to changes downloaded from the other device. */
+function applyRemoteChanges(changes) {
+  for (const c of changes) {
+    if (c.type !== 'alerts' || c.deleted) continue;
+    if (c.record.action === 'dismiss') Scheduler.dismiss(store.data, c.id, now());
+    else Scheduler.acknowledge(store.data, c.id);
+    silence(c.id);
+  }
+  // Meetings and tasks: the reminder engine recalculates from the new data on the next check.
+  tick();
+  broadcast();
+}
+
+async function runSync() {
+  if (!syncEngine) return;
+  try {
+    await syncEngine.sync();
+  } catch (_) { /* recorded in lastError and shown in Settings */ }
+  broadcast();
+  scheduleSync();
+}
+
+function scheduleSync() {
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(runSync, needsAttention() ? SYNC_INTERVAL_ALERT_MS : SYNC_INTERVAL_MS);
+}
+
+/** Upload shortly after a local change (several quick edits are sent together). */
+function syncSoon() {
+  clearTimeout(syncSoonTimer);
+  syncSoonTimer = setTimeout(runSync, 1500);
+}
+
+function syncStatus() {
+  return syncEngine ? syncEngine.status() : { configured: false, signedIn: false };
+}
+
 function snapshot() {
   const d = store.data;
   return {
@@ -220,6 +306,8 @@ function snapshot() {
     reminders: { active: d.reminders.active, missed: d.reminders.missed },
     upcoming: Scheduler.upcoming(d, now()),
     clockOffset,
+    sync: { ...syncStatus(), buildConfigured: !!(BUILD_SYNC_CONFIG.apiKey && BUILD_SYNC_CONFIG.projectId) },
+    platform: 'desktop',
     isPackaged: app.isPackaged,
     version: app.getVersion(),
   };
@@ -304,33 +392,8 @@ function createTray() {
   updateTrayMenu();
 }
 
-const SETTING_KEYS = {
-  voiceName: 'string', volume: 'number', rate: 'number', muted: 'boolean', speechEngine: 'string',
-  notifications: 'boolean', openAtLogin: 'boolean', startHidden: 'boolean', snoozeMinutes: 'number',
-  attentionEnabled: 'boolean', attentionTasks: 'boolean', alarmSound: 'string', alarmVolume: 'number',
-  alarmSeconds: 'number', repeatSeconds: 'number', flashing: 'boolean', vibrateGamepad: 'boolean',
-  webhookEnabled: 'boolean', webhookType: 'string', webhookUrl: 'string',
-};
-
 function updateSettings(patch) {
-  const s = store.data.settings;
-  for (const [k, v] of Object.entries(patch || {})) {
-    if (SETTING_KEYS[k] && typeof v === SETTING_KEYS[k]) s[k] = v;
-  }
-  s.volume = Math.min(1, Math.max(0, s.volume));
-  s.rate = Math.min(2, Math.max(0.5, s.rate));
-  s.snoozeMinutes = [1, 2, 5, 10, 15].includes(s.snoozeMinutes) ? s.snoozeMinutes : 5;
-  if (!['browser', 'windows'].includes(s.speechEngine)) s.speechEngine = 'browser';
-  if (Array.isArray(patch && patch.attentionOffsets)) {
-    s.attentionOffsets = Scheduler.MEETING_OFFSETS.filter((o) => patch.attentionOffsets.includes(o));
-  }
-  if (!['siren', 'beeps', 'bell'].includes(s.alarmSound)) s.alarmSound = 'siren';
-  s.alarmVolume = Math.min(1, Math.max(0.05, s.alarmVolume));
-  s.alarmSeconds = [2, 4, 6, 10].includes(s.alarmSeconds) ? s.alarmSeconds : 4;
-  s.repeatSeconds = [30, 60, 120, 180, 300].includes(s.repeatSeconds) ? s.repeatSeconds : 60;
-  if (!['ntfy', 'json'].includes(s.webhookType)) s.webhookType = 'ntfy';
-  s.webhookUrl = s.webhookUrl.trim().slice(0, 1000);
-  if (s.webhookEnabled && !webhookUrlValid(s.webhookUrl)) s.webhookEnabled = false;
+  const s = applySettings(store.data.settings, patch);
   store.save();
   if ('openAtLogin' in (patch || {})) applyLoginItem();
   broadcast();
@@ -376,21 +439,54 @@ function mutate(fn) {
   store.save();
   tick();
   broadcast();
+  syncSoon();
   return value;
+}
+
+/** Record acknowledge/dismiss so the other device stops the alert too. */
+function recordAlert(instance, action) {
+  const targets = instance ? [instance] : store.data.reminders.active.filter((x) => x.needsAck).map((x) => x.instance);
+  for (const i of targets) Model.recordAlertAction(store.data, i, action, now());
 }
 
 function registerIpc() {
   handle('state:get', () => snapshot());
   handle('meeting:save', (input) => mutate(() => Model.saveMeeting(store.data, input, now())));
   handle('meeting:status', (id, status) => mutate(() => Model.setMeetingStatus(store.data, id, status === 'cancelled' ? 'cancelled' : 'scheduled', now())));
-  handle('meeting:delete', (id) => mutate(() => Model.deleteMeeting(store.data, id)));
+  handle('meeting:delete', (id) => mutate(() => Model.deleteMeeting(store.data, id, now())));
   handle('task:save', (input) => mutate(() => Model.saveTask(store.data, input, now())));
   handle('task:complete', (id, done) => mutate(() => Model.setTaskCompleted(store.data, id, done, now())));
-  handle('task:delete', (id) => mutate(() => Model.deleteTask(store.data, id)));
+  handle('task:delete', (id) => mutate(() => Model.deleteTask(store.data, id, now())));
   handle('settings:update', (patch) => updateSettings(patch));
-  handle('reminder:snooze', (instance, minutes) => { silence(instance); return mutate(() => Scheduler.snooze(store.data, instance, Number(minutes) || store.data.settings.snoozeMinutes, now())); });
-  handle('reminder:dismiss', (instance) => { silence(instance); return mutate(() => Scheduler.dismiss(store.data, instance, now())); });
-  handle('reminder:acknowledge', (instance) => { silence(instance || null); return mutate(() => Scheduler.acknowledge(store.data, instance || null)); });
+  handle('reminder:snooze', (instance, minutes) => {
+    silence(instance);
+    return mutate(() => { recordAlert(instance, 'ack'); Scheduler.snooze(store.data, instance, Number(minutes) || store.data.settings.snoozeMinutes, now()); });
+  });
+  handle('reminder:dismiss', (instance) => {
+    silence(instance);
+    return mutate(() => { recordAlert(instance, 'dismiss'); Scheduler.dismiss(store.data, instance, now()); });
+  });
+  handle('reminder:acknowledge', (instance) => {
+    silence(instance || null);
+    return mutate(() => { recordAlert(instance || null, 'ack'); Scheduler.acknowledge(store.data, instance || null); });
+  });
+  handle('sync:signIn', async (email, password, create) => {
+    if (!syncEngine.client.configured) createSyncEngine();
+    try { await syncEngine.signIn(email, password, !!create); } finally { broadcast(); scheduleSync(); }
+    tick();
+    return syncStatus();
+  });
+  handle('sync:signOut', () => { syncEngine.signOut(); broadcast(); return syncStatus(); });
+  handle('sync:resetPassword', (email) => syncEngine.client.sendPasswordReset(String(email || '').trim()));
+  handle('sync:now', async () => { await syncEngine.sync().finally(broadcast); return syncStatus(); });
+  handle('sync:setConfig', (cfg) => {
+    store.data.settings.syncProjectId = String((cfg && cfg.projectId) || '').trim();
+    store.data.settings.syncApiKey = String((cfg && cfg.apiKey) || '').trim();
+    store.save();
+    createSyncEngine();
+    broadcast();
+    return syncStatus();
+  });
   handle('attention:test', () => {
     const a = Scheduler.startTestAlert(store.data, now());
     store.save();
@@ -431,6 +527,7 @@ if (app.hasSingleInstanceLock()) {
   app.whenReady().then(() => {
     store.load();
     if (process.env.EAD_CLOCK_OFFSET_MS && IS_TEST) clockOffset = Number(process.env.EAD_CLOCK_OFFSET_MS) || 0;
+    createSyncEngine();
     registerIpc();
     createWindow();
     createAttentionWindow();
@@ -440,8 +537,11 @@ if (app.hasSingleInstanceLock()) {
     win.webContents.once('did-finish-load', () => {
       tick();
       setInterval(tick, TICK_MS);
+      runSync();
     });
-    for (const ev of ['resume', 'unlock-screen']) powerMonitor.on(ev, () => setTimeout(tick, 1500));
+    for (const ev of ['resume', 'unlock-screen']) {
+      powerMonitor.on(ev, () => { setTimeout(tick, 1500); setTimeout(runSync, 3000); });
+    }
   });
   app.on('before-quit', () => { quitting = true; });
   app.on('window-all-closed', (e) => e.preventDefault()); // stay in the tray

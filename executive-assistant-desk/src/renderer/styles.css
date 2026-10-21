@@ -179,3 +179,65 @@ input[type=range] { width: 100%; }
 .field-label { font-weight: 600; font-size: .92rem; margin-bottom: .2rem; }
 .check.big { font-size: 1.1rem; font-weight: 600; }
 @media (max-width: 1100px) { .grid3 { grid-template-columns: 1fr; } }
+
+/* Account & sync */
+.account-panel { margin-bottom: 1rem; border-top: 4px solid var(--accent); }
+.sync-pill.ok { background: rgba(24,121,78,.35) !important; }
+.sync-pill.warn { background: #f2c94c !important; color: #3b2a00 !important; }
+.sync-pill.busy { background: rgba(255,255,255,.2) !important; }
+
+/* Desktop-only / phone-only parts of the shared screens */
+body.mobile .desktop-only { display: none !important; }
+body:not(.mobile) .mobile-only { display: none !important; }
+
+/* Android full-screen attention alert */
+.attention-overlay { position: fixed; inset: 0; z-index: 100; background: #a1081d; color: #fff; padding: calc(env(safe-area-inset-top) + 1rem) 1.2rem 1.5rem; overflow-y: auto; border: 6px solid #ffd400; }
+.attention-overlay.flash { animation: ov-flash 1s steps(1, end) infinite; }
+@keyframes ov-flash { 0% { background: #a1081d; border-color: #ffd400; } 50% { background: #1b1b1b; border-color: #ff2a2a; } }
+.ov-head { font-weight: 800; letter-spacing: .14em; margin-bottom: 1rem; }
+.ov-item + .ov-item { border-top: 1px solid rgba(255,255,255,.35); margin-top: 1.2rem; padding-top: 1.2rem; }
+.ov-title { font-size: 1.6rem; font-weight: 700; line-height: 1.25; }
+.ov-when { font-size: 1.35rem; color: #ffe066; font-weight: 600; margin: .3rem 0; }
+.ov-zones { font-size: 1rem; margin-bottom: 1rem; }
+.attention-overlay button { font: inherit; border-radius: 10px; border: 2px solid #fff; background: transparent; color: #fff; padding: .7rem 1rem; font-size: 1.05rem; }
+.attention-overlay .ov-ack { display: block; width: 100%; background: #ffd400; color: #1b1b1b; border-color: #ffd400; font-weight: 800; font-size: 1.35rem; padding: 1rem; margin: .4rem 0 .7rem; }
+.ov-row { display: flex; gap: .5rem; flex-wrap: wrap; }
+.ov-row button { flex: 1; }
+
+/* Phones and narrow windows */
+@media (max-width: 700px) {
+  :root { font-size: 15px; }
+  .topbar { flex-wrap: wrap; gap: .5rem; padding: calc(env(safe-area-inset-top) + .5rem) .75rem .5rem; }
+  .brand h1 { font-size: 1.05rem; }
+  .brand-icon { width: 26px; height: 26px; }
+  .tabs { order: 3; width: 100%; margin-left: 0; overflow-x: auto; }
+  .tab { flex: 1; padding: .45rem .3rem; font-size: .95rem; }
+  .quick { margin-left: auto; gap: .35rem; }
+  .quick .btn { padding: .4rem .55rem; font-size: .85rem; }
+  .clocks { grid-template-columns: repeat(3, 1fr); gap: .4rem; padding: .6rem .6rem 0; }
+  .clock { padding: .5rem .5rem; border-top-width: 3px; }
+  .clock-label { font-size: .78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .clock-time { font-size: 1.15rem; letter-spacing: 0; }
+  .clock-date { font-size: .72rem; }
+  .clock-meta { font-size: .68rem; }
+  main { padding: .6rem .6rem 2rem; }
+  .alerts { padding: 0 .6rem; }
+  .alert { flex-wrap: wrap; }
+  .alert-actions { width: 100%; flex-wrap: wrap; }
+  .panel { padding: .8rem .75rem; }
+  .panel-head { flex-wrap: wrap; }
+  .equivs { grid-template-columns: 1fr; }
+  .row3 { grid-template-columns: 1fr; gap: 0; }
+  .task { flex-wrap: wrap; }
+  .task-actions { width: 100%; justify-content: flex-start; }
+  dialog { width: 100vw; max-width: 100vw; max-height: 100vh; border-radius: 0; margin: 0; }
+  dialog form { padding: 1rem; }
+}
+
+@media (max-width: 700px) {
+  .brand { width: 100%; }
+  .quick { width: 100%; margin-left: 0; }
+  .quick .btn.primary { flex: 1; }
+  .clock-time { font-size: 1.35rem; white-space: nowrap; }
+  .clock-date, .clock-meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+}

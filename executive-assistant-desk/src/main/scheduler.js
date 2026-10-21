@@ -307,5 +307,6 @@ function nextDueAt(data, now) {
 
 module.exports = {
   MEETING_OFFSETS, GRACE_MS, MINUTE, TEST_INSTANCE, evaluate, snooze, dismiss, acknowledge, startTestAlert, upcoming, nextDueAt,
+  wantsAttention, attentionSettings, repeatUntilFor,
   reminderSlots, meetingText, taskText, meetingInstanceKey,
 };

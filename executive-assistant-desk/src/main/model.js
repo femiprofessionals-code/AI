@@ -1,10 +1,24 @@
-/* Validation and mutation of meetings and tasks (pure, testable). */
-const crypto = require('crypto');
+/*
+ * Validation and mutation of meetings and tasks (pure, testable; also bundled into the
+ * Android app). Every change is recorded in data.sync so it can be uploaded to the
+ * other device; deletions leave a tombstone so they reach the other device too.
+ */
 const TZ = require('../shared/tz');
 
 const ZONE_IDS = TZ.ZONES.map((z) => z.id);
 
-function newId() { return crypto.randomUUID(); }
+function newId() { return globalThis.crypto.randomUUID(); }
+
+/** Mark a record as changed locally so the next sync uploads it. */
+function touch(data, type, id) {
+  if (data.sync) data.sync.dirty[`${type}/${id}`] = true;
+}
+
+function tombstone(data, type, id, now) {
+  if (!data.sync) return;
+  data.sync.tombstones[`${type}/${id}`] = now;
+  data.sync.dirty[`${type}/${id}`] = true;
+}
 
 function cleanText(v, max) { return String(v == null ? '' : v).trim().slice(0, max); }
 
@@ -59,6 +73,7 @@ function saveMeeting(data, input, now) {
     meeting = { id: newId(), ...fields, status: 'scheduled', createdAt: now, updatedAt: now, armedAt: now, history: [] };
     data.meetings.push(meeting);
   }
+  touch(data, 'meetings', meeting.id);
   return { meeting, warning };
 }
 
@@ -68,11 +83,13 @@ function setMeetingStatus(data, id, status, now) {
   if (status === 'scheduled' && m.status === 'cancelled') m.armedAt = now; // restoring: don't replay old lead times
   m.status = status;
   m.updatedAt = now;
+  touch(data, 'meetings', id);
   return m;
 }
 
-function deleteMeeting(data, id) {
+function deleteMeeting(data, id, now) {
   data.meetings = data.meetings.filter((m) => m.id !== id);
+  tombstone(data, 'meetings', id, now || Date.now());
 }
 
 function saveTask(data, input, now) {
@@ -97,6 +114,7 @@ function saveTask(data, input, now) {
     task = { id: newId(), ...fields, completed: false, completedAt: null, createdAt: now, updatedAt: now, armedAt: now };
     data.tasks.push(task);
   }
+  touch(data, 'tasks', task.id);
   return task;
 }
 
@@ -107,11 +125,27 @@ function setTaskCompleted(data, id, completed, now) {
   t.completedAt = completed ? now : null;
   if (!completed) t.armedAt = now; // reopened: only future reminders apply
   t.updatedAt = now;
+  touch(data, 'tasks', id);
   return t;
 }
 
-function deleteTask(data, id) {
+function deleteTask(data, id, now) {
   data.tasks = data.tasks.filter((t) => t.id !== id);
+  tombstone(data, 'tasks', id, now || Date.now());
 }
 
-module.exports = { saveMeeting, setMeetingStatus, deleteMeeting, saveTask, setTaskCompleted, deleteTask, cleanLink };
+/**
+ * Remember that an alert was acknowledged ('ack') or dismissed ('dismiss') so the
+ * other device stops it too. Snoozing counts as acknowledging the current alert.
+ */
+function recordAlertAction(data, instance, action, now) {
+  if (!instance || instance.startsWith('test:')) return;
+  const prev = data.alertActions[instance];
+  if (prev && prev.action === 'dismiss' && action === 'ack') return; // dismiss already covers it
+  data.alertActions[instance] = { action, at: now, updatedAt: now };
+  touch(data, 'alerts', instance);
+}
+
+module.exports = {
+  saveMeeting, setMeetingStatus, deleteMeeting, saveTask, setTaskCompleted, deleteTask, recordAlertAction, cleanLink, touch,
+};

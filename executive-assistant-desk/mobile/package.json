@@ -1,0 +1,25 @@
+{
+  "name": "executive-assistant-desk-mobile",
+  "version": "1.2.0",
+  "private": true,
+  "description": "Android app for Executive Assistant Desk (Capacitor). Shares the reminder engine, screens and sync with the desktop app.",
+  "scripts": {
+    "build": "node scripts/build-www.js && npx cap sync android",
+    "build:www": "node scripts/build-www.js",
+    "apk": "npm run build && cd android && ./gradlew assembleDebug",
+    "resources": "node scripts/android-resources.js"
+  },
+  "dependencies": {
+    "@capacitor-community/text-to-speech": "^8.0.2",
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/haptics": "^8.0.2",
+    "@capacitor/local-notifications": "^8.3.1",
+    "@capacitor/preferences": "^8.0.1"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
+    "esbuild": "^0.25.10"
+  }
+}
