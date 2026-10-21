@@ -49,3 +49,7 @@ ai-content-studio/
 ## License
 
 MIT
+
+## Also in this repository
+
+- [`executive-assistant-desk/`](executive-assistant-desk/README.md) — Windows desktop app (Electron) for an Executive Director's meetings, three time-zone clocks, spoken reminders and daily tasks.

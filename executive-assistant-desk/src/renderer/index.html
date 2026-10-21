@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:">
+  <title>Executive Assistant Desk</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="../../assets/icon.png" alt="" class="brand-icon">
+      <h1>Executive Assistant Desk</h1>
+    </div>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-view="dashboard" role="tab">Dashboard</button>
+      <button class="tab" data-view="meetings" role="tab">Meetings</button>
+      <button class="tab" data-view="tasks" role="tab">Tasks</button>
+      <button class="tab" data-view="settings" role="tab">Settings</button>
+    </nav>
+    <div class="quick">
+      <button class="btn primary" id="btn-add-meeting">+ Add meeting</button>
+      <button class="btn primary" id="btn-add-task">+ Add task</button>
+      <button class="btn icon" id="btn-mute" title="Mute or unmute spoken reminders"></button>
+    </div>
+  </header>
+
+  <section class="clocks" id="clocks" aria-label="World clocks"></section>
+
+  <section id="alerts" class="alerts" aria-live="polite"></section>
+
+  <main>
+    <!-- Dashboard -->
+    <section class="view active" id="view-dashboard">
+      <div class="grid2">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Today's meetings <span class="muted" id="today-label"></span></h2>
+            <button class="btn small" data-action="add-meeting">+ Add meeting</button>
+          </div>
+          <div id="today-meetings" class="list"></div>
+          <div class="subhead" id="next-meetings-head" hidden>Coming up next</div>
+          <div id="next-meetings" class="list"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Daily checklist</h2>
+            <button class="btn small" data-action="add-task">+ Add task</button>
+          </div>
+          <div id="today-tasks"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Meetings -->
+    <section class="view" id="view-meetings">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Meetings</h2>
+          <div class="filters">
+            <select id="meeting-filter" aria-label="Show meetings">
+              <option value="upcoming">Upcoming</option>
+              <option value="past">Past</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="all">All</option>
+            </select>
+            <button class="btn small" data-action="add-meeting">+ Add meeting</button>
+          </div>
+        </div>
+        <div id="meetings-list" class="list"></div>
+      </div>
+    </section>
+
+    <!-- Tasks -->
+    <section class="view" id="view-tasks">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Tasks</h2>
+          <button class="btn small" data-action="add-task">+ Add task</button>
+        </div>
+        <div id="tasks-all"></div>
+      </div>
+    </section>
+
+    <!-- Settings -->
+    <section class="view" id="view-settings">
+      <div class="grid2">
+        <div class="panel">
+          <h2>Spoken reminders</h2>
+          <p class="muted">Meetings are announced 30, 20, 10 and 5 minutes before they start, together with a Windows notification.</p>
+          <label class="field"><span>Speech engine</span>
+            <select id="set-engine">
+              <option value="browser">Built-in voices (recommended)</option>
+              <option value="windows">Windows speech (PowerShell)</option>
+            </select>
+          </label>
+          <label class="field"><span>Voice</span><select id="set-voice"></select></label>
+          <label class="field"><span>Volume <output id="out-volume"></output></span><input type="range" id="set-volume" min="0" max="1" step="0.05"></label>
+          <label class="field"><span>Speaking speed <output id="out-rate"></output></span><input type="range" id="set-rate" min="0.6" max="1.6" step="0.1"></label>
+          <label class="check"><input type="checkbox" id="set-muted"> Mute spoken reminders (notifications still appear)</label>
+          <label class="field"><span>Snooze length</span>
+            <select id="set-snooze">
+              <option value="1">1 minute</option><option value="2">2 minutes</option><option value="5">5 minutes</option>
+              <option value="10">10 minutes</option><option value="15">15 minutes</option>
+            </select>
+          </label>
+          <div class="row">
+            <button class="btn primary" id="btn-test-voice">Test voice</button>
+            <span class="muted" id="voice-status"></span>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Windows</h2>
+          <label class="check"><input type="checkbox" id="set-notifications"> Show Windows desktop notifications</label>
+          <label class="check"><input type="checkbox" id="set-login"> Start automatically when I sign in to Windows</label>
+          <label class="check"><input type="checkbox" id="set-hidden"> When started at sign-in, open quietly in the system tray</label>
+          <p class="muted" id="login-note"></p>
+          <p class="muted">Closing the window keeps the app running in the system tray (bottom-right of the taskbar) so reminders continue. To exit completely, right-click the tray icon and choose <strong>Quit</strong>.</p>
+          <h2>About</h2>
+          <p class="muted" id="about"></p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Meeting dialog -->
+  <dialog id="meeting-dialog">
+    <form method="dialog" id="meeting-form" novalidate>
+      <h2 id="meeting-dialog-title">Add meeting</h2>
+      <input type="hidden" name="id">
+      <label class="field"><span>Title</span><input name="title" required maxlength="200" placeholder="e.g. Budget review with the Executive Director"></label>
+      <div class="row3">
+        <label class="field"><span>Date</span><input type="date" name="date" required></label>
+        <label class="field"><span>Start time</span><input type="time" name="time" required></label>
+        <label class="field"><span>Duration</span>
+          <select name="duration">
+            <option value="15">15 minutes</option><option value="30">30 minutes</option><option value="45">45 minutes</option>
+            <option value="60">1 hour</option><option value="90">1 hour 30 minutes</option><option value="120">2 hours</option>
+            <option value="180">3 hours</option><option value="240">4 hours</option><option value="480">All day (8 hours)</option>
+          </select>
+        </label>
+      </div>
+      <label class="field"><span>Time zone the meeting was set in</span><select name="timeZone" id="meeting-zone"></select></label>
+      <div class="preview" id="meeting-preview" aria-live="polite"></div>
+      <label class="field"><span>Meeting link (optional)</span><input name="link" placeholder="https://zoom.us/j/…"></label>
+      <label class="field"><span>Notes</span><textarea name="notes" rows="3"></textarea></label>
+      <p class="error" id="meeting-error"></p>
+      <div class="dialog-actions">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="submit" class="btn primary" id="meeting-submit">Save meeting</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Task dialog -->
+  <dialog id="task-dialog">
+    <form method="dialog" id="task-form" novalidate>
+      <h2 id="task-dialog-title">Add task</h2>
+      <input type="hidden" name="id">
+      <label class="field"><span>Task</span><input name="title" required maxlength="300" placeholder="e.g. Send board packet to directors"></label>
+      <div class="row3">
+        <label class="field"><span>Due date</span><input type="date" name="dueDate" required></label>
+        <label class="field"><span>Due time (optional)</span><input type="time" name="dueTime"></label>
+        <label class="field"><span>Priority</span>
+          <select name="priority"><option value="high">High</option><option value="medium" selected>Medium</option><option value="low">Low</option></select>
+        </label>
+      </div>
+      <div class="row">
+        <label class="check"><input type="checkbox" name="speak"> Speak a reminder</label>
+        <select name="leadMinutes" aria-label="When to remind">
+          <option value="0">at the due time</option><option value="5">5 minutes before</option><option value="10">10 minutes before</option>
+          <option value="15">15 minutes before</option><option value="30">30 minutes before</option><option value="60">1 hour before</option>
+        </select>
+      </div>
+      <p class="muted small" id="task-speak-note">Spoken task reminders need a due time.</p>
+      <label class="field"><span>Notes</span><textarea name="notes" rows="3"></textarea></label>
+      <p class="error" id="task-error"></p>
+      <div class="dialog-actions">
+        <button type="button" class="btn" data-close>Cancel</button>
+        <button type="submit" class="btn primary">Save task</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Confirm dialog -->
+  <dialog id="confirm-dialog">
+    <form method="dialog">
+      <p id="confirm-text"></p>
+      <div class="dialog-actions">
+        <button value="no" class="btn">No</button>
+        <button value="yes" class="btn danger" id="confirm-yes">Yes</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status"></div>
+
+  <script src="../shared/tz.js"></script>
+  <script src="../shared/tasks.js"></script>
+  <script src="speech.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

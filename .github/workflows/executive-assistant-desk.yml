@@ -1,0 +1,40 @@
+name: Executive Assistant Desk (Windows build)
+
+on:
+  push:
+    paths:
+      - 'executive-assistant-desk/**'
+      - '.github/workflows/executive-assistant-desk.yml'
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: executive-assistant-desk
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: executive-assistant-desk/package-lock.json
+      - run: npm ci
+      - name: Unit tests (time zones, DST, reminder timing, saving, tasks)
+        run: npm test
+      - name: End-to-end test of the real app on Windows
+        run: npm run test:e2e -- e2e-screenshots
+      - name: Build Windows installer
+        run: npm run dist:win
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Executive-Assistant-Desk-Setup
+          path: executive-assistant-desk/dist/*.exe
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: e2e-screenshots
+          path: executive-assistant-desk/e2e-screenshots
+          if-no-files-found: ignore
