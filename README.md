@@ -49,3 +49,7 @@ ai-content-studio/
 ## License
 
 MIT
+
+## Also in this repository
+
+- [`gospel-ai-studio/`](gospel-ai-studio/README.md): **Gospel AI Studio**, an offline-first Windows desktop app (Tauri + React + Rust + SQLite + FFmpeg) for Gospel Conversations and Gospel Hypeman videos. It is self-contained and independent of the AI Content Studio code above.
