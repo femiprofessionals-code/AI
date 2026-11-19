@@ -57,7 +57,7 @@
         {
           "cameraPermission": "Lets a parent take a photo for the My Body, My Picture lesson.",
           "photosPermission": false,
-          "microphonePermission": false
+          "microphonePermission": "Lets a parent record their voice for lessons."
         }
       ],
       [
