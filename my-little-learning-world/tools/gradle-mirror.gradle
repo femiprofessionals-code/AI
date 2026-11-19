@@ -1,0 +1,15 @@
+// Passed with --init-script by tools/build-apk.sh: tries Google's Maven Central
+// mirror first, because Maven Central sometimes rate-limits this build machine.
+def MIRROR = 'https://maven-central.storage-download.googleapis.com/maven2/'
+def addMirror = { RepositoryHandler r ->
+  if (r.findByName('gcsMirror') == null) {
+    def repo = r.maven { url MIRROR; name 'gcsMirror' }
+    r.remove(repo)
+    r.addFirst(repo)
+  }
+}
+beforeSettings { s -> addMirror(s.pluginManagement.repositories) }
+allprojects { p ->
+  addMirror(p.buildscript.repositories)
+  addMirror(p.repositories)
+}
