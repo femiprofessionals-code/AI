@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View, type ViewStyle, type StyleProp, useWindowDimensions } from 'react-native';
+import { Pressable, StyleSheet, View, type ViewStyle, type StyleProp, useWindowDimensions } from 'react-native';
+import { Text } from './text';
 import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withSpring, withTiming, withDelay, Easing } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, radius, font } from '../theme';
@@ -7,6 +8,7 @@ import { items } from '../content/items';
 import { SvgArt, hasDrawing } from '../art/drawings';
 import { say, sfx, stopAll } from '../audio/audio';
 import { useApp } from '../store';
+import { Scenery, type SceneId } from '../art/scenery';
 
 // ---------- pictures ----------
 export function Art({ id, size = 100, mood }: { id: string; size?: number; mood?: string }) {
@@ -109,19 +111,24 @@ export function shade(hex: string, amt = 0.18) {
 }
 
 // ---------- layout ----------
-export function Screen({ children, bg = colors.cream, repeat, title, onBack, noHome }: { children: React.ReactNode; bg?: string; repeat?: string | string[]; title?: string; onBack?: () => void; noHome?: boolean }) {
+export function Screen({ children, scene = 'home', repeat, title, onBack, noHome }: { children: React.ReactNode; scene?: SceneId; bg?: string; repeat?: string | string[]; title?: string; onBack?: () => void; noHome?: boolean }) {
   const insets = useSafeAreaInsets();
   const home = useApp((s) => s.home);
   const back = useApp((s) => s.back);
   return (
-    <View style={[styles.screen, { backgroundColor: bg, paddingTop: insets.top + 8, paddingBottom: insets.bottom + 8 }]}>
+    <View style={[styles.screen, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 8 }]}>
+      <Scenery id={scene} />
       <View style={styles.topBar}>
-        {!noHome && <RoundButton art="🏠" onPress={() => { stopAll(); home(); }} label="Home" />}
-        {onBack !== undefined || !noHome ? <RoundButton art="⬅️" onPress={() => { stopAll(); (onBack ?? back)(); }} label="Back" /> : null}
-        <View style={{ flex: 1, paddingHorizontal: 12 }}>
-          {title ? <Text style={[font.label, { textAlign: 'center' }]} numberOfLines={1}>{title}</Text> : null}
+        {!noHome && <RoundButton art="🏠" onPress={() => { stopAll(); home(); }} label="Home" size={68} />}
+        {!noHome ? <RoundButton art="⬅️" onPress={() => { stopAll(); (onBack ?? back)(); }} label="Back" size={68} /> : null}
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          {title ? (
+            <View style={styles.titlePill}>
+              <Text style={styles.titleText} numberOfLines={1}>{title}</Text>
+            </View>
+          ) : null}
         </View>
-        {repeat ? <SpeakerButton lines={repeat} /> : <View style={{ width: 76 }} />}
+        {repeat ? <SpeakerButton lines={repeat} size={68} /> : <View style={{ width: 68 }} />}
       </View>
       <View style={{ flex: 1 }}>{children}</View>
       <Caption />
@@ -192,13 +199,20 @@ export function PopIn({ children, delay = 0, style }: { children: React.ReactNod
   return <Animated.View style={[st, style]}>{children}</Animated.View>;
 }
 
+// Soft drop shadow (Android elevation + iOS/web shadow).
+export function shadow(level: number) {
+  return { elevation: level, shadowColor: '#2B2A4C', shadowOpacity: 0.12 + level * 0.02, shadowRadius: level * 3, shadowOffset: { width: 0, height: level } };
+}
+
 export const styles = StyleSheet.create({
-  screen: { flex: 1, paddingHorizontal: 16 },
+  screen: { flex: 1, paddingHorizontal: 18, backgroundColor: colors.cream },
+  titlePill: { backgroundColor: 'rgba(255,255,255,0.92)', borderRadius: 999, paddingHorizontal: 28, paddingVertical: 6, ...shadow(3) },
+  titleText: { fontSize: 26, fontWeight: '800', color: colors.ink },
   topBar: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 },
-  big: { minHeight: 96, borderRadius: radius.lg, paddingHorizontal: 24, paddingVertical: 14, justifyContent: 'center', borderBottomWidth: 7 },
+  big: { minHeight: 96, borderRadius: radius.lg, paddingHorizontal: 24, paddingVertical: 14, justifyContent: 'center', borderBottomWidth: 7, ...shadow(4) },
   bigSmall: { minHeight: 76, paddingHorizontal: 16 },
-  round: { alignItems: 'center', justifyContent: 'center', borderBottomWidth: 5 },
-  card: { borderRadius: radius.lg, padding: 16, borderBottomWidth: 6, alignItems: 'center', justifyContent: 'center' },
+  round: { alignItems: 'center', justifyContent: 'center', borderBottomWidth: 5, ...shadow(3) },
+  card: { borderRadius: radius.lg, padding: 16, borderBottomWidth: 6, alignItems: 'center', justifyContent: 'center', ...shadow(4) },
   caption: { position: 'absolute', left: 120, right: 120, bottom: 10, backgroundColor: 'rgba(43,42,76,0.85)', borderRadius: 20, paddingHorizontal: 18, paddingVertical: 8 },
   captionText: { color: '#fff', fontSize: 18, fontWeight: '700', textAlign: 'center' },
 });

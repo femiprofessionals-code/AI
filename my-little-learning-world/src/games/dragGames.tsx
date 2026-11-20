@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '../components/text';
 import type { Activity } from '../content/types';
 import { P } from '../content';
 import { say, sfx } from '../audio/audio';

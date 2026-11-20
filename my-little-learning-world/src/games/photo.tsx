@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Image, Platform, Text, View } from 'react-native';
+import { Image, Platform, View } from 'react-native';
+import { Text } from '../components/text';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Svg, { Circle, Ellipse, Path, Rect } from 'react-native-svg';
 import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';

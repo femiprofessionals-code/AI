@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, Text, View, useWindowDimensions } from 'react-native';
+import { ScrollView, View, useWindowDimensions } from 'react-native';
+import { Text } from '../components/text';
 import { lessons, lessonById, worlds, worldById, P, unlockables, PVS_STAR } from '../content';
 import { scoreLine } from '../content/extraLines';
 import { questions as bank } from '../content/questions';
@@ -114,7 +115,7 @@ export function WorldScreen({ worldId }: { worldId: string }) {
   const wc = worldColors[w.id];
   useEffect(() => { say(P.lessonsIntro); }, []);
   return (
-    <Screen bg={wc.tint} title={w.title} repeat={[w.title, P.lessonsIntro]}>
+    <Screen scene={w.id} title={w.title} repeat={[w.title, P.lessonsIntro]}>
       <View style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 24, justifyContent: 'center', alignItems: 'center' }}>
         {w.lessons.map((id, i) => {
           const l = lessonById(id);
@@ -195,7 +196,7 @@ export function GameScreen({ lessonId, index }: { lessonId: string; index: numbe
   const [done, setDone] = useState(false);
   const a = l.practice[index];
   return (
-    <Screen bg={worldColors[l.world].tint} title={l.title} repeat={a.title}>
+    <Screen scene={l.world} title={l.title} repeat={a.title}>
       <View style={{ flex: 1 }}>
         <GameView activity={a} lessonId={lessonId} nonce={n} onDone={() => { setDone(true); useApp.getState().addStars(1, `game:${lessonId}:${index}`); }} />
       </View>

@@ -44,6 +44,17 @@
       "predictiveBackGestureEnabled": false
     },
     "plugins": [
+      [
+        "expo-font",
+        {
+          "fonts": [
+            "./assets/fonts/Baloo2_500Medium.ttf",
+            "./assets/fonts/Baloo2_600SemiBold.ttf",
+            "./assets/fonts/Baloo2_700Bold.ttf",
+            "./assets/fonts/Baloo2_800ExtraBold.ttf"
+          ]
+        }
+      ],
       "expo-sqlite",
       [
         "expo-audio",

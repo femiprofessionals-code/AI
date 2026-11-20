@@ -6,7 +6,8 @@ src/audio/songTimings.generated.json (when each sung line starts).
 """
 import json, os, subprocess, tempfile, wave
 import numpy as np
-from piper import PiperVoice, SynthesisConfig
+import soundfile as sf
+from kokoro_onnx import Kokoro
 
 SR = 44100
 os.makedirs('assets/audio/sfx', exist_ok=True)
@@ -107,16 +108,16 @@ def read_wav(path):
     return data
 
 def songs():
-    voice = PiperVoice.load('/opt/piper/en_GB-jenny_dioco-medium.onnx')
-    cfg = SynthesisConfig(length_scale=1.05, noise_scale=0.7, noise_w_scale=0.9)
+    # Same voice as the narration (Kokoro af_heart), slightly livelier for chanting.
+    k = Kokoro('/opt/kokoro/model.onnx', '/opt/kokoro/voices.npz')
     timings = {}
     for s in json.load(open('tools/out/songs.json')):
         clips = []
         for i, line in enumerate(s['lines']):
+            a, sr = k.create(line, voice='af_heart', speed=0.95, lang='en-us')
             p = f"{tmp}/{s['id']}-{i}.wav"
-            with wave.open(p, 'wb') as wf:
-                voice.synthesize_wav(line, wf, syn_config=cfg)
-            subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', p, '-af', 'silenceremove=start_periods=1:start_threshold=-50dB,areverse,silenceremove=start_periods=1:start_threshold=-50dB,areverse', f'{p}.t.wav'], check=True)
+            sf.write(p, a, sr)
+            subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', p, '-af', 'silenceremove=start_periods=1:start_threshold=-50dB,areverse,silenceremove=start_periods=1:start_threshold=-50dB,areverse', '-ac', '1', '-ar', str(SR), f'{p}.t.wav'], check=True)
             clips.append(read_wav(f'{p}.t.wav'))
         bpm = TUNES[s['tune']][0]; bar = 60 / bpm * 4
         # Each line starts on a bar line and gets as many bars as it needs.

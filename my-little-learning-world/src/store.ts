@@ -39,7 +39,7 @@ export type Settings = {
 
 const DEFAULTS: Settings = {
   narrationVolume: 1, sfxVolume: 0.7, musicVolume: 0.7, dailyMinutes: 20, timedMode: false, reduceMotion: false,
-  useParentNameClip: true, companion: 'bibi', pinSet: false, unlockAll: false,
+  useParentNameClip: false, companion: 'bibi', pinSet: false, unlockAll: false,
 };
 
 type State = {

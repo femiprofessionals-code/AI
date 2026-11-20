@@ -10,8 +10,10 @@ import { bodyJob } from '../src/content/lessons/body';
 import { extraLines } from '../src/content/extraLines';
 
 const lines = new Map<string, string>();
+const templates = new Set<string>(); // whole lines that contain {name}
 const add = (t?: string) => {
   if (!t) return;
+  if (t.includes('{name}')) templates.add(normalizeLine(t));
   for (const seg of splitName(t)) {
     if (seg === '{name}') continue;
     const n = normalizeLine(seg);
@@ -61,5 +63,6 @@ const songs = lessons.map((l) => ({ id: l.id, tune: l.song.tune, lines: l.song.l
 
 mkdirSync('tools/out', { recursive: true });
 writeFileSync('tools/out/lines.json', JSON.stringify([...lines].map(([key, text]) => ({ key, text })), null, 1));
+writeFileSync('tools/out/name-lines.json', JSON.stringify([...templates], null, 1));
 writeFileSync('tools/out/songs.json', JSON.stringify(songs, null, 1));
 console.log(`${lines.size} lines, ${songs.length} songs`);

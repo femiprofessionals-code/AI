@@ -1,13 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, Text, View } from 'react-native';
+import { ScrollView, View } from 'react-native';
+import { Text } from '../components/text';
 import { lessonById, worldOfLesson, P } from '../content';
-import { lessonIntroLine, starsLine } from '../content/extraLines';
+import { lessonIntroLine, starsLine, quickName, tapLine } from '../content/extraLines';
+import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import { Tile, nameLine, shuffle, useLadder } from '../games/common';
+import { StyleSheet } from 'react-native';
 import { questions as bank } from '../content/questions';
 import { say, sfx, playMusic, stopAll, stopMusic, SONGS } from '../audio/audio';
 import timings from '../audio/songTimings.generated.json';
 import { useApp, taughtLessons } from '../store';
 import { selectQuestions } from '../engine/examSelect';
-import { Art, BigButton, Bouncy, Character, Confetti, PopIn, Screen, Stars } from '../components/ui';
+import { Art, BigButton, Bouncy, Character, Confetti, PopIn, Screen, Stars, shadow } from '../components/ui';
 import { GameView } from '../games';
 import { ExamRunner, type ExamAnswer } from '../games/exam';
 import { colors, radius, worldColors } from '../theme';
@@ -47,7 +51,7 @@ export function LessonScreen({ lessonId, startStage }: { lessonId: string; start
   const repeatLine = P.stageNames[key];
 
   return (
-    <Screen bg={wc.tint} title={`${lesson.number}. ${lesson.title}`} repeat={repeatLine}>
+    <Screen scene={lesson.world} title={`${lesson.number}. ${lesson.title}`} repeat={repeatLine}>
       <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 10, marginBottom: 6 }}>
         {STAGES.map((s, i) => (
           <Bouncy key={s} onPress={() => (i + 1 <= Math.max(stage, st.stage) || st.status === 'completed' ? goStage(i + 1) : say(P.stageNames[s]))}>
@@ -73,7 +77,9 @@ export function LessonScreen({ lessonId, startStage }: { lessonId: string; start
 function NextButton({ onPress, ready = true, label = 'Next' }: { onPress: () => void; ready?: boolean; label?: string }) {
   return (
     <View style={{ alignItems: 'flex-end', paddingRight: 8 }}>
-      <BigButton label={label} art="sparkle" color={ready ? colors.leaf : colors.white} onPress={onPress} small />
+      <Pulse active={ready}>
+        <BigButton label={label} art="sparkle" color={ready ? colors.leaf : colors.white} onPress={onPress} />
+      </Pulse>
     </View>
   );
 }
@@ -88,41 +94,121 @@ function Welcome({ lessonId, onNext }: { lessonId: string; onNext: () => void })
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 20 }}>
       <PopIn><Character id={lesson.character} size={260} talking={talking} /></PopIn>
       <Text style={{ fontSize: 30, fontWeight: '800', color: colors.ink, textAlign: 'center' }}>{lesson.title}</Text>
-      <BigButton label="Let's learn!" art={lesson.icon} color={colors.leaf} onPress={onNext} />
+      <Pulse active={!talking}>
+        <BigButton label="Let's learn!" art={lesson.icon} color={colors.leaf} onPress={onNext} />
+      </Pulse>
     </View>
   );
 }
 
+const NO_CHECK = ['healthy', 'energy', 'basket', 'grow'];
+
+type LearnStep = { kind: 'card'; index: number } | { kind: 'check'; target: string; choices: string[]; topic: string };
+
+// Facts with a quick tap-check after every two: hear it, then recall it.
+function buildSteps(lessonId: string): LearnStep[] {
+  const lesson = lessonById(lessonId);
+  const steps: LearnStep[] = [];
+  const seen: { art: string; topic: string }[] = [];
+  let sinceCheck = 0;
+  lesson.learn.forEach((c, i) => {
+    steps.push({ kind: 'card', index: i });
+    const checkable = quickName(c.art) && !NO_CHECK.includes(c.art) && !(c.topic ?? '').endsWith('.safety');
+    if (checkable && !seen.some((x) => x.art === c.art)) seen.push({ art: c.art, topic: c.topic ?? lesson.topics[0].id });
+    sinceCheck++;
+    const target = seen[seen.length - 1];
+    if (sinceCheck >= 2 && seen.length >= 2 && target && target.art === c.art) {
+      const others = seen.filter((x) => x.art !== target.art).map((x) => x.art).slice(-2);
+      steps.push({ kind: 'check', target: target.art, choices: shuffle([target.art, ...others]), topic: target.topic });
+      sinceCheck = 0;
+    }
+  });
+  return steps;
+}
+
 function Learn({ lessonId, onNext }: { lessonId: string; onNext: () => void }) {
   const lesson = lessonById(lessonId);
+  const steps = useMemo(() => buildSteps(lessonId), [lessonId]);
   const [i, setI] = useState(0);
   const [done, setDone] = useState(false);
-  const card = lesson.learn[i];
+  const step = steps[i];
+  const last = i + 1 >= steps.length;
+  const next = () => { stopAll(); if (last) onNext(); else setI(i + 1); };
   useEffect(() => {
     setDone(false);
-    say(card.lines).then(() => setDone(true));
+    if (step.kind === 'card') say(lesson.learn[step.index].lines).then(() => setDone(true));
   }, [i]);
-  const last = i + 1 >= lesson.learn.length;
+  const cardsDone = steps.slice(0, i + 1).filter((s) => s.kind === 'card').length;
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 30 }}>
-        <Bouncy onPress={() => i > 0 && setI(i - 1)} disabled={i === 0}><Text style={{ fontSize: 64 }}>⬅️</Text></Bouncy>
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+      {step.kind === 'card' ? (
         <PopIn key={i}>
-          <Bouncy onPress={() => say(card.lines)}>
-            <View style={{ width: 440, minHeight: 360, backgroundColor: colors.white, borderRadius: radius.lg, padding: 20, alignItems: 'center', justifyContent: 'center', gap: 12, borderBottomWidth: 8, borderBottomColor: '#E8DCC4' }}>
-              <Art id={card.art} size={230} />
-              {card.lines.map((l, k) => <Text key={k} style={{ fontSize: 24, fontWeight: '800', color: colors.ink, textAlign: 'center' }}>{l}</Text>)}
+          <Bouncy onPress={() => say(lesson.learn[step.index].lines)}>
+            <View style={[styles.learnCard, shadow(5)]}>
+              <Art id={lesson.learn[step.index].art} size={220} />
+              {lesson.learn[step.index].lines.map((l, k) => <Text key={k} style={{ fontSize: 26, fontWeight: '800', color: colors.ink, textAlign: 'center', lineHeight: 34 }}>{l}</Text>)}
             </View>
           </Bouncy>
         </PopIn>
-        <Bouncy onPress={() => (last ? onNext() : setI(i + 1))}><Text style={{ fontSize: 64, opacity: done ? 1 : 0.5 }}>➡️</Text></Bouncy>
+      ) : (
+        <QuickCheck key={i} lessonId={lessonId} target={step.target} choices={step.choices} topic={step.topic} onDone={() => setDone(true)} />
+      )}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 18 }}>
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          {lesson.learn.map((_, k) => <View key={k} style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: k < cardsDone ? colors.leaf : 'rgba(255,255,255,0.9)' }} />)}
+        </View>
       </View>
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        {lesson.learn.map((_, k) => <View key={k} style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: k <= i ? colors.leaf : colors.white }} />)}
+      <View style={{ position: 'absolute', right: 8, bottom: 40 }}>
+        <Pulse active={done}>
+          <BigButton label={last ? 'Explore!' : 'Next'} art="sparkle" color={done ? colors.leaf : colors.white} onPress={next} />
+        </Pulse>
       </View>
-      {last && done && <NextButton onPress={onNext} />}
+      {i > 0 && (
+        <View style={{ position: 'absolute', left: 8, bottom: 40 }}>
+          <BigButton label="Back" art="sparkle" small color={colors.white} onPress={() => { stopAll(); setI(i - 1); }} />
+        </View>
+      )}
     </View>
   );
+}
+
+// "Tap the nose!" right after learning it.
+function QuickCheck({ lessonId, target, choices, topic, onDone }: { lessonId: string; target: string; choices: string[]; topic: string; onDone: () => void }) {
+  const [states, setStates] = useState<Record<string, 'right' | 'wrong' | 'reveal'>>({});
+  const [solved, setSolved] = useState(false);
+  const ladder = useLadder(lessonId, 'practice');
+  const prompt = tapLine(target);
+  useEffect(() => { say(['Quick check!', prompt]); }, []);
+  const pick = async (c: string) => {
+    if (solved) return;
+    if (c === target) {
+      setSolved(true);
+      setStates({ [c]: 'right' });
+      await ladder.right(`${lessonId}.check.${target}`, topic);
+      onDone();
+    } else {
+      const reveal = await ladder.wrong(`${lessonId}.check.${target}`, topic, c, prompt, nameLine(target));
+      setStates(reveal ? { [c]: 'wrong', [target]: 'reveal' } : { [c]: 'wrong' });
+    }
+  };
+  return (
+    <View style={{ alignItems: 'center', gap: 18 }}>
+      <View style={[styles.checkPill, shadow(3)]}><Text style={{ fontSize: 30, fontWeight: '800', color: colors.ink }}>🧠 {prompt}</Text></View>
+      <View style={{ flexDirection: 'row', gap: 26 }}>
+        {choices.map((c) => <PopIn key={c}><Tile art={c} size={190} state={states[c] ?? 'idle'} onPress={() => pick(c)} /></PopIn>)}
+      </View>
+    </View>
+  );
+}
+
+// Gently pulses its child to show "tap me next".
+function Pulse({ active, children }: { active: boolean; children: React.ReactNode }) {
+  const s = useSharedValue(1);
+  useEffect(() => {
+    s.value = active ? withRepeat(withSequence(withTiming(1.07, { duration: 550 }), withTiming(1, { duration: 550 })), -1) : withTiming(1);
+  }, [active]);
+  const st = useAnimatedStyle(() => ({ transform: [{ scale: s.value }] }));
+  return <Animated.View style={st}>{children}</Animated.View>;
 }
 
 function Explore({ lessonId, onNext }: { lessonId: string; onNext: () => void }) {
@@ -297,3 +383,8 @@ function Celebrate({ lessonId }: { lessonId: string }) {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  learnCard: { width: 520, minHeight: 380, backgroundColor: colors.white, borderRadius: radius.lg, padding: 24, alignItems: 'center', justifyContent: 'center', gap: 10 },
+  checkPill: { backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 999, paddingHorizontal: 30, paddingVertical: 8 },
+});

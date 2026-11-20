@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Text, View } from 'react-native';
+import { View } from 'react-native';
+import { Text } from '../components/text';
 import Svg, { Circle, Ellipse, Path } from 'react-native-svg';
 import type { Activity, Round } from '../content/types';
 import { P } from '../content';

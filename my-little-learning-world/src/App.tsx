@@ -3,6 +3,8 @@ import { AppState, BackHandler, Platform, Pressable, ScrollView, Text, View } fr
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
+import { useFonts } from 'expo-font';
+import { FONT_FILES } from './components/text';
 import { useApp } from './store';
 import { initAudio, stopAll } from './audio/audio';
 import { colors } from './theme';
@@ -71,6 +73,7 @@ if (Platform.OS === 'web') { (globalThis as any).__app = useApp; (globalThis as 
 
 export default function App() {
   const loaded = useApp((s) => s.loaded);
+  const [fontsReady, fontError] = useFonts(FONT_FILES);
   const [startError, setStartError] = useState<unknown>(null);
   useEffect(() => {
     try { useApp.getState().load(); } catch (e) { console.error('[app] start-up failed', e); setStartError(e); }
@@ -95,7 +98,7 @@ export default function App() {
         <StatusBar hidden />
         <ErrorBoundary>
           {startError ? <ErrorPage error={startError} onRetry={() => { try { useApp.getState().load(); setStartError(null); } catch (e) { setStartError(e); } }} />
-            : loaded ? <Router /> : <View style={{ flex: 1, backgroundColor: colors.cream }} />}
+            : loaded && (fontsReady || fontError) ? <Router /> : <View style={{ flex: 1, backgroundColor: colors.cream }} />}
           <CelebrationOverlay />
         </ErrorBoundary>
       </SafeAreaProvider>

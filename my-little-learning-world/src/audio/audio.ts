@@ -44,7 +44,7 @@ type Config = {
   onCaption?: (text: string | null) => void;
 };
 
-const cfg: Config = { narrationVolume: 1, sfxVolume: 0.8, musicVolume: 0.8, name: '', useParentNameClip: true, recordings: {} };
+const cfg: Config = { narrationVolume: 1, sfxVolume: 0.8, musicVolume: 0.8, name: '', useParentNameClip: false, recordings: {} };
 export function configureAudio(c: Partial<Config>) {
   Object.assign(cfg, c);
   try { if (musicPlayer) musicPlayer.volume = cfg.musicVolume; } catch {}
@@ -90,40 +90,42 @@ export async function initAudio() {
   } catch {}
 }
 
-// Plays one clip on the shared voice player. Resolves true when it played,
-// false when it could not start (the caller then uses text-to-speech).
-function playSource(source: number | string, volume: number, gen: number): Promise<boolean> {
+// Plays one clip on the shared voice player. Resolves 'played', 'skipped'
+// (interrupted) or 'failed' (never started within 6 s).
+function playSource(source: number | string, volume: number, gen: number): Promise<'played' | 'skipped' | 'failed'> {
   return new Promise((resolve) => {
-    if (gen !== generation) return resolve(true);
+    if (gen !== generation) return resolve('skipped');
     let p: AudioPlayer;
-    try { p = getVoicePlayer(); } catch { return resolve(false); }
+    try { p = getVoicePlayer(); } catch { return resolve('failed'); }
     let done = false;
     let started = false;
-    const finish = (ok: boolean) => {
+    const finish = (r: 'played' | 'skipped' | 'failed') => {
       if (done) return;
       done = true;
       clearTimeout(guard);
       voiceListener = null;
-      if (!ok) { voiceFailures++; resetVoicePlayer(); } else if (started) voiceFailures = 0;
-      resolve(ok);
+      if (r === 'failed') { voiceFailures++; resetVoicePlayer(); }
+      if (r === 'played') voiceFailures = 0;
+      resolve(r);
     };
-    // If the clip has not started after 2.5 s it failed: fall back to speech.
-    let guard = setTimeout(() => finish(started), 2500);
+    // A clip that has not started after 6 s is treated as failed. The player is
+    // then destroyed, so it can never start late and talk over anything else.
+    let guard = setTimeout(() => finish(started ? 'played' : 'failed'), 6000);
     voiceListener = (st) => {
-      if (gen !== generation) return finish(true);
-      if (started && st.didJustFinish) return finish(true);
+      if (gen !== generation) return finish('skipped');
+      if (started && st.didJustFinish) return finish('played');
       if (!started && (st.playing || st.currentTime > 0)) {
         started = true;
         clearTimeout(guard);
         const left = st.duration > 0 ? st.duration - st.currentTime : 15;
-        guard = setTimeout(() => finish(true), (left + 1.5) * 1000);
+        guard = setTimeout(() => finish('played'), (left + 1.5) * 1000);
       }
     };
     try {
       p.volume = volume;
       p.replace(source as any);
       p.play();
-    } catch { finish(false); }
+    } catch { finish('failed'); }
   });
 }
 
@@ -138,26 +140,44 @@ function speakTts(text: string, gen: number): Promise<void> {
   });
 }
 
+// After 3 clips in a row fail to start, this device cannot play the bundled
+// voice: the whole session then uses the tablet's own voice, never a mix.
+const ttsOnly = () => voiceFailures >= 3;
+
 export function hasClip(text: string) {
   return !!VOICE[lineKey(text)];
 }
 
+async function playLine(src: number | string | undefined, text: string, gen: number) {
+  if (ttsOnly() || src === undefined) return speakTts(text, gen);
+  const r = await playSource(src, cfg.narrationVolume, gen);
+  if (r === 'failed' && ttsOnly() && gen === generation) await speakTts(text, gen);
+}
+
 async function speakSegment(seg: string, gen: number) {
-  const tts = seg === '{name}' ? cfg.name || 'friend' : seg;
-  const tryClip = async (src: number | string) => {
-    if (voiceFailures >= 3) return speakTts(tts, gen); // clips keep failing on this device
-    if (!(await playSource(src, cfg.narrationVolume, gen)) && gen === generation) await speakTts(tts, gen);
-  };
   if (seg === '{name}') {
-    if (cfg.recordings['{name}']) return tryClip(cfg.recordings['{name}']);
-    if (cfg.useParentNameClip && STARTER.nameClip && cfg.name === STARTER.childName) return tryClip(STARTER.nameClip);
-    return speakTts(tts, gen);
+    const name = cfg.name || 'friend';
+    if (cfg.recordings['{name}']) return playLine(cfg.recordings['{name}'], name, gen);
+    if (cfg.useParentNameClip && STARTER.nameClip && cfg.name === STARTER.childName) return playLine(STARTER.nameClip, name, gen);
+    return playLine(VOICE[lineKey(name)], name, gen);
   }
   const key = lineKey(seg);
-  if (cfg.recordings[key]) return tryClip(cfg.recordings[key]);
-  if (VOICE[key]) return tryClip(VOICE[key]);
-  console.warn('[voice] no clip for:', seg);
-  return speakTts(seg, gen);
+  if (!cfg.recordings[key] && !VOICE[key]) console.warn('[voice] no clip for:', seg);
+  return playLine(cfg.recordings[key] ?? VOICE[key], seg, gen);
+}
+
+// Speak one whole line: a clip of the full sentence (her name included) is
+// preferred; otherwise the line is spoken in pieces around the name.
+async function speakLine(line: string, gen: number) {
+  if (line.includes('{name}') && cfg.name) {
+    const full = normalizeLine(line.replace(/\{name\}/g, cfg.name));
+    const k = lineKey(full);
+    if (cfg.recordings[k] || (VOICE[k] && !(cfg.useParentNameClip && STARTER.nameClip))) return playLine(cfg.recordings[k] ?? VOICE[k], full, gen);
+  }
+  for (const seg of splitName(line)) {
+    if (gen !== generation) return;
+    await speakSegment(seg, gen);
+  }
 }
 
 /** Speak one or more lines in order. Resolves when finished or interrupted. */
@@ -169,10 +189,7 @@ export async function say(lines: string | string[], opts: { interrupt?: boolean 
     if (gen !== generation) return;
     const caption = normalizeLine(line).replace(/\{name\}/g, cfg.name || 'friend');
     cfg.onCaption?.(caption);
-    for (const seg of splitName(line)) {
-      if (gen !== generation) return;
-      await speakSegment(seg, gen);
-    }
+    await speakLine(line, gen);
     await new Promise((r) => setTimeout(r, 180));
   }
   if (gen === generation) cfg.onCaption?.(null);
@@ -227,3 +244,6 @@ export async function playFile(uri: string) {
   stopSpeech();
   await playSource(uri, cfg.narrationVolume, generation);
 }
+
+/** True when the bundled voice cannot play on this device (for the parent area). */
+export const usingTabletVoice = () => ttsOnly();
