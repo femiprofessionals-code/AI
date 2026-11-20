@@ -1,5 +1,5 @@
-import React, { useEffect } from 'react';
-import { AppState, BackHandler, Platform, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { AppState, BackHandler, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -11,6 +11,33 @@ import { LessonScreen } from './screens/lesson';
 import { ParentGate, ParentScreen } from './screens/parent';
 import { Screen } from './components/ui';
 import { GameView } from './games';
+
+// If anything goes wrong, show a calm page with the details instead of closing.
+function ErrorPage({ error, onRetry }: { error: unknown; onRetry: () => void }) {
+  const e = error as any;
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.cream, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16 }}>
+      <Text style={{ fontSize: 30, fontWeight: '800', color: colors.ink }}>Oops! Something went wrong.</Text>
+      <Text style={{ fontSize: 18, color: colors.ink }}>Please tell the grown-up. Tap the button to try again.</Text>
+      <Pressable onPress={onRetry} style={{ backgroundColor: colors.leaf, borderRadius: 24, paddingHorizontal: 32, paddingVertical: 18 }}>
+        <Text style={{ fontSize: 24, fontWeight: '800', color: colors.ink }}>Try again</Text>
+      </Pressable>
+      <ScrollView style={{ maxHeight: 240, alignSelf: 'stretch', backgroundColor: '#fff', borderRadius: 12, padding: 12 }}>
+        <Text selectable style={{ fontSize: 13, color: '#B91C1C' }}>{String(e?.message ?? e)}{'\n'}{String(e?.stack ?? '').slice(0, 1500)}</Text>
+      </ScrollView>
+    </View>
+  );
+}
+
+class ErrorBoundary extends React.Component<{ children: React.ReactNode }, { error: unknown }> {
+  state = { error: null as unknown };
+  static getDerivedStateFromError(error: unknown) { return { error }; }
+  componentDidCatch(error: unknown) { console.error('[app] screen error', error); }
+  render() {
+    if (this.state.error) return <ErrorPage error={this.state.error} onRetry={() => { useApp.getState().home(); this.setState({ error: null }); }} />;
+    return this.props.children;
+  }
+}
 
 function Router() {
   const route = useApp((s) => s.stack[s.stack.length - 1]);
@@ -44,9 +71,10 @@ if (Platform.OS === 'web') { (globalThis as any).__app = useApp; (globalThis as 
 
 export default function App() {
   const loaded = useApp((s) => s.loaded);
+  const [startError, setStartError] = useState<unknown>(null);
   useEffect(() => {
-    useApp.getState().load();
-    initAudio();
+    try { useApp.getState().load(); } catch (e) { console.error('[app] start-up failed', e); setStartError(e); }
+    initAudio().catch((e) => console.error('[app] audio init failed', e));
     // Count learning time while the app is open on a child screen.
     const t = setInterval(() => {
       const s = useApp.getState();
@@ -65,8 +93,11 @@ export default function App() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.cream }}>
       <SafeAreaProvider>
         <StatusBar hidden />
-        {loaded ? <Router /> : <View style={{ flex: 1, backgroundColor: colors.cream }} />}
-        <CelebrationOverlay />
+        <ErrorBoundary>
+          {startError ? <ErrorPage error={startError} onRetry={() => { try { useApp.getState().load(); setStartError(null); } catch (e) { setStartError(e); } }} />
+            : loaded ? <Router /> : <View style={{ flex: 1, backgroundColor: colors.cream }} />}
+          <CelebrationOverlay />
+        </ErrorBoundary>
       </SafeAreaProvider>
     </GestureHandlerRootView>
   );
