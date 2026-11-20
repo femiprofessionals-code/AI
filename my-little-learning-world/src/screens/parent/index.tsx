@@ -434,7 +434,11 @@ function SoundVoice() {
     const uri = recorder.uri;
     if (uri && recKey) {
       let dest = uri;
-      if (Platform.OS !== 'web') {
+      if (Platform.OS === 'web') {
+        // Keep the recording inside the saved data so it survives a restart.
+        const blob = await (await fetch(uri)).blob();
+        dest = await new Promise<string>((res) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.readAsDataURL(blob); });
+      } else {
         const d = new Directory(Paths.document, 'recordings');
         if (!d.exists) d.create({ intermediates: true, idempotent: true });
         const f = new File(d, `${recKey === '{name}' ? 'name' : recKey}-${Date.now()}.m4a`);

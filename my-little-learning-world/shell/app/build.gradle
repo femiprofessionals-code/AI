@@ -1,0 +1,38 @@
+// A deliberately tiny Android app: one Activity hosting a WebView that shows
+// the learning app bundled in assets/www. No third-party libraries.
+plugins { id 'com.android.application' }
+
+def signing = file('../../private/signing.json')
+def s = signing.exists() ? new groovy.json.JsonSlurper().parse(signing) : null
+
+android {
+    namespace 'com.family.mylittlelearningworld'
+    compileSdk 36
+    defaultConfig {
+        applicationId 'com.family.mylittlelearningworld'
+        minSdk 24
+        targetSdk 35
+        versionCode 4
+        versionName '3.0.0'
+    }
+    signingConfigs {
+        family {
+            if (s) {
+                storeFile file("../../private/${s.storeFile}")
+                storePassword s.storePassword
+                keyAlias s.keyAlias
+                keyPassword s.keyPassword
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig s ? signingConfigs.family : signingConfigs.debug
+        }
+    }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+    // Audio, images and fonts are already compressed; storing them uncompressed makes them load faster.
+    androidResources { noCompress += ['m4a', 'jpg', 'png', 'ttf', 'js'] }
+    lint { checkReleaseBuilds false; abortOnError false }
+}

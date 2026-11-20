@@ -1,58 +1,82 @@
-// Web/test implementation: in memory. The Android app uses repo.native.ts (SQLite).
+// Storage for the WebView build (and the browser test suite).
+// Everything lives in one JSON document in localStorage, saved after every
+// change, so progress survives closing the app. The React Native build uses
+// repo.native.ts (SQLite) instead.
 import type { DayRow, ExamSession, LessonProgress, PhotoRow, QuestionAttempt, RecordingRow, Repo, RewardRow, TopicMastery } from './types';
 
-const s = {
-  settings: new Map<string, string>(),
-  photos: new Map<string, PhotoRow>(),
-  progress: new Map<string, LessonProgress>(),
-  attempts: [] as QuestionAttempt[],
-  mastery: new Map<string, TopicMastery>(),
-  exams: [] as ExamSession[],
-  rewards: [] as RewardRow[],
-  stars: [] as { amount: number; source: string }[],
-  days: new Map<string, DayRow>(),
-  recordings: new Map<string, RecordingRow>(),
+const KEY = 'mllw-data-v1';
+
+type Data = {
+  settings: Record<string, string>;
+  photos: Record<string, PhotoRow>;
+  progress: Record<string, LessonProgress>;
+  attempts: QuestionAttempt[];
+  mastery: Record<string, TopicMastery>;
+  exams: ExamSession[];
+  rewards: RewardRow[];
+  stars: { amount: number; source: string; at: number }[];
+  days: Record<string, DayRow>;
+  recordings: Record<string, RecordingRow>;
 };
 
+const empty = (): Data => ({ settings: {}, photos: {}, progress: {}, attempts: [], mastery: {}, exams: [], rewards: [], stars: [], days: {}, recordings: {} });
+let d: Data = empty();
+
+function storage(): Storage | null {
+  try { return typeof localStorage !== 'undefined' ? localStorage : null; } catch { return null; }
+}
+function save() {
+  try { storage()?.setItem(KEY, JSON.stringify(d)); } catch (e) { console.warn('[repo] save failed', e); }
+}
+const clone = <T,>(x: T): T => JSON.parse(JSON.stringify(x));
+
 export const repo: Repo = {
-  init() {},
-  getSetting: (k) => s.settings.get(k) ?? null,
-  setSetting: (k, v) => void s.settings.set(k, v),
-  getPhotos: () => [...s.photos.values()],
-  savePhoto: (p) => void s.photos.set(p.kind, structuredClone(p)),
-  deletePhoto: (k) => void s.photos.delete(k),
-  getLessonProgress: () => [...s.progress.values()].map((p) => ({ ...p })),
-  saveLessonProgress: (p) => void s.progress.set(p.lessonId, { ...p }),
-  addAttempt: (a) => void s.attempts.push({ ...a }),
-  getAttempts: () => s.attempts.map((a) => ({ ...a })),
-  getMastery: () => [...s.mastery.values()].map((m) => ({ ...m })),
-  saveMastery: (m) => void s.mastery.set(m.topicId, { ...m }),
+  init() {
+    try {
+      const raw = storage()?.getItem(KEY);
+      if (raw) d = { ...empty(), ...JSON.parse(raw) };
+    } catch (e) {
+      console.warn('[repo] could not read saved data, starting fresh', e);
+      d = empty();
+    }
+  },
+  getSetting: (k) => d.settings[k] ?? null,
+  setSetting: (k, v) => { d.settings[k] = v; save(); },
+  getPhotos: () => clone(Object.values(d.photos)),
+  savePhoto: (p) => { d.photos[p.kind] = clone(p); save(); },
+  deletePhoto: (k) => { delete d.photos[k]; save(); },
+  getLessonProgress: () => clone(Object.values(d.progress)),
+  saveLessonProgress: (p) => { d.progress[p.lessonId] = { ...p }; save(); },
+  addAttempt: (a) => { d.attempts.push({ ...a }); if (d.attempts.length > 5000) d.attempts.splice(0, d.attempts.length - 5000); save(); },
+  getAttempts: () => clone(d.attempts),
+  getMastery: () => clone(Object.values(d.mastery)),
+  saveMastery: (m) => { d.mastery[m.topicId] = { ...m }; save(); },
   addExam: (e) => {
-    const id = s.exams.length + 1;
-    s.exams.push({ ...e, id });
+    const id = (d.exams.reduce((m, x) => Math.max(m, x.id ?? 0), 0) || 0) + 1;
+    d.exams.push({ ...e, id });
+    save();
     return id;
   },
   updateExam: (e) => {
-    const i = s.exams.findIndex((x) => x.id === e.id);
-    if (i >= 0) s.exams[i] = { ...e };
+    const i = d.exams.findIndex((x) => x.id === e.id);
+    if (i >= 0) { d.exams[i] = { ...d.exams[i], ...e, startedAt: d.exams[i].startedAt, lessons: e.lessons.length ? e.lessons : d.exams[i].lessons }; save(); }
   },
-  getExams: () => [...s.exams].reverse(),
+  getExams: () => clone(d.exams).sort((a, b) => b.startedAt - a.startedAt),
   addReward: (r) => {
-    if (!s.rewards.some((x) => x.kind === r.kind && x.rewardId === r.rewardId)) s.rewards.push(r);
+    if (!d.rewards.some((x) => x.kind === r.kind && x.rewardId === r.rewardId)) { d.rewards.push(r); save(); }
   },
-  getRewards: () => [...s.rewards],
-  addStars: (amount, source) => void s.stars.push({ amount, source }),
-  totalStars: () => s.stars.reduce((a, b) => a + b.amount, 0),
-  getDay: (d) => s.days.get(d) ?? null,
-  saveDay: (d) => void s.days.set(d.date, { ...d }),
-  getDays: () => [...s.days.values()].sort((a, b) => b.date.localeCompare(a.date)),
-  getRecordings: () => [...s.recordings.values()],
-  saveRecording: (r) => void s.recordings.set(r.lineKey, r),
-  deleteRecording: (k) => void s.recordings.delete(k),
+  getRewards: () => clone(d.rewards),
+  addStars: (amount, source) => { d.stars.push({ amount, source, at: Date.now() }); save(); },
+  totalStars: () => d.stars.reduce((a, b) => a + b.amount, 0),
+  getDay: (day) => (d.days[day] ? clone(d.days[day]) : null),
+  saveDay: (x) => { d.days[x.date] = clone(x); save(); },
+  getDays: () => clone(Object.values(d.days)).sort((a, b) => b.date.localeCompare(a.date)),
+  getRecordings: () => clone(Object.values(d.recordings)),
+  saveRecording: (r) => { d.recordings[r.lineKey] = r; save(); },
+  deleteRecording: (k) => { delete d.recordings[k]; save(); },
   resetProgress: () => {
-    s.progress.clear(); s.attempts = []; s.mastery.clear(); s.exams = []; s.rewards = []; s.stars = []; s.days.clear();
+    d = { ...empty(), settings: d.settings, photos: d.photos, recordings: d.recordings };
+    save();
   },
-  deleteEverything: () => {
-    repo.resetProgress(); s.settings.clear(); s.photos.clear(); s.recordings.clear();
-  },
+  deleteEverything: () => { d = empty(); save(); },
 };

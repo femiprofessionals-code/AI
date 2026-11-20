@@ -50,3 +50,10 @@ assets/audio/voice/
 src/private.generated.ts
 src/audio/voiceManifest.generated.ts
 dist/
+
+# WebView edition build outputs
+shell/app/src/main/assets/www/
+shell/local.properties
+shell/app/build/
+shell/.gradle/
+shell/build/

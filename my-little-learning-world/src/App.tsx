@@ -69,7 +69,15 @@ function Router() {
 }
 
 // Browser build only: lets the automated screen check navigate directly.
-if (Platform.OS === 'web') { (globalThis as any).__app = useApp; (globalThis as any).__bank = require('./content/questions').questions; (globalThis as any).__items = require('./content/items').items; }
+if (Platform.OS === 'web') {
+  const g = globalThis as any;
+  g.__app = useApp;
+  g.__bank = require('./content/questions').questions;
+  g.__items = require('./content/items').items;
+  // Called by the Android wrapper: the tablet's Back button and going to sleep.
+  g.__appBack = () => { const s = useApp.getState(); stopAll(); if (s.stack.length > 1) s.back(); return true; };
+  g.__appPause = () => stopAll();
+}
 
 export default function App() {
   const loaded = useApp((s) => s.loaded);

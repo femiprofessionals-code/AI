@@ -24,8 +24,11 @@ export async function pickPhoto(kind: PhotoKind, from: 'camera' | 'gallery'): Pr
   const res = from === 'camera' ? await ImagePicker.launchCameraAsync(opts) : await ImagePicker.launchImageLibraryAsync(opts);
   if (res.canceled || !res.assets?.[0]) return null;
   const a = res.assets[0];
-  const small = await manipulateAsync(a.uri, [{ resize: a.width > a.height ? { width: 1200 } : { height: 1600 } }], { compress: 0.85, format: SaveFormat.JPEG });
-  let uri = small.uri;
+  const web = Platform.OS === 'web';
+  // In the WebView app photos are stored inside the saved data as a data: URL
+  // (a temporary blob: address would be gone after a restart).
+  const small = await manipulateAsync(a.uri, [{ resize: a.width > a.height ? { width: 1000 } : { height: 1200 } }], { compress: 0.8, format: SaveFormat.JPEG, base64: web });
+  let uri = web && small.base64 ? `data:image/jpeg;base64,${small.base64}` : small.uri;
   if (Platform.OS !== 'web') {
     const dest = new File(dir(), `${kind}-${Date.now()}.jpg`);
     new File(small.uri).copy(dest);
