@@ -13,7 +13,7 @@ npx tsc --noEmit
 npx tsx --test tests/*.test.ts
 EXPO_OFFLINE=1 CI=1 npx expo prebuild --platform android --no-install --clean
 echo "sdk.dir=$ANDROID_HOME" > android/local.properties
-grep -q "java.installations.paths" android/gradle.properties || printf '\norg.gradle.java.installations.paths=%s\norg.gradle.java.installations.auto-download=false\norg.gradle.jvmargs=-Xmx6g -XX:MaxMetaspaceSize=1g\n' "$JAVA_HOME" >> android/gradle.properties
+grep -q "java.installations.paths" android/gradle.properties || printf '\norg.gradle.java.installations.paths=%s\norg.gradle.java.installations.auto-download=false\norg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g\n' "$JAVA_HOME" >> android/gradle.properties
 (cd android && ./gradlew --init-script ../tools/gradle-mirror.gradle assembleRelease -PreactNativeArchitectures=${ARCHS:-arm64-v8a,armeabi-v7a})
 mkdir -p dist
 cp android/app/build/outputs/apk/release/app-release.apk dist/MyLittleLearningWorld.apk
