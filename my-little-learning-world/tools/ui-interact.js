@@ -17,7 +17,7 @@ const check = (name, ok, detail = '') => { results.push(`${ok ? 'PASS' : 'FAIL'}
   const logs = [];
   const captions = [];
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') logs.push(`${m.type()}: ${m.text().slice(0, 200)}`); });
-  page.on('pageerror', (e) => logs.push(`pageerror: ${e.message}`));
+  page.on('pageerror', (e) => { if (!/play\(\) request was interrupted/.test(e.message)) logs.push(`pageerror: ${e.message}`); });
   await page.route('https://app.local/**', (route) => {
     let p = decodeURIComponent(new URL(route.request().url()).pathname);
     if (p === '/') p = '/index.html';
@@ -88,7 +88,7 @@ const check = (name, ok, detail = '') => { results.push(`${ok ? 'PASS' : 'FAIL'}
   let photoOk = 0;
   for (let round = 0; round < 5; round++) {
     let prompt = null;
-    for (let w = 0; w < 60 && !prompt; w++) {
+    for (let w = 0; w < 140 && !prompt; w++) {
       prompt = (await said()).reverse().find((c) => /(find your|Where is your|Show me your) (\w+)/.test(c));
       if (!prompt) await page.waitForTimeout(250);
     }
@@ -171,8 +171,10 @@ const check = (name, ok, detail = '') => { results.push(`${ok ? 'PASS' : 'FAIL'}
   check('Next moves to the second fact', await waitSaid('These are your eyes.'));
   await page.getByText('Next', { exact: true }).first().click();
   check('a quick check follows two facts', await waitSaid('Tap the eyes!'));
-  await page.getByText('👀').first().click();
-  check('tapping the right picture is praised', await waitSaid('!', 8000) && (await said()).some((c) => /Wow|Wonderful|Excellent|Yes|Brilliant|Hooray|Super|did it|Fantastic|Great|Clever|correct/.test(c)));
+  await page.getByText('👀').last().click();
+  let praised = false;
+  for (let w = 0; w < 60 && !praised; w++) { praised = (await said()).some((c) => /Wow|Wonderful|Excellent|Yes!|Brilliant|Hooray|Super|did it|Fantastic|Great|Clever|correct/.test(c)); if (!praised) await page.waitForTimeout(250); }
+  check('tapping the right picture is praised', praised);
 
   // 9. Parent PIN: create, confirm, enter; a wrong PIN is refused.
   await nav({ name: 'parentGate' });

@@ -2,7 +2,7 @@
   "expo": {
     "name": "My Little Learning World",
     "slug": "my-little-learning-world",
-    "version": "1.0.1",
+    "version": "2.0.0",
     "orientation": "landscape",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -17,7 +17,7 @@
     },
     "android": {
       "package": "com.family.mylittlelearningworld",
-      "versionCode": 2,
+      "versionCode": 3,
       "allowBackup": false,
       "adaptiveIcon": {
         "backgroundColor": "#FFF3CC",
