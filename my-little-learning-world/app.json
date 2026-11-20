@@ -2,7 +2,7 @@
   "expo": {
     "name": "My Little Learning World",
     "slug": "my-little-learning-world",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "landscape",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -17,7 +17,7 @@
     },
     "android": {
       "package": "com.family.mylittlelearningworld",
-      "versionCode": 1,
+      "versionCode": 2,
       "allowBackup": false,
       "adaptiveIcon": {
         "backgroundColor": "#FFF3CC",
@@ -65,12 +65,13 @@
         {
           "android": {
             "compileSdkVersion": 36,
-            "targetSdkVersion": 36,
+            "targetSdkVersion": 35,
             "buildToolsVersion": "36.0.0",
             "minSdkVersion": 26
           }
         }
-      ]
+      ],
+      "./plugins/withReleaseSigning"
     ]
   }
 }

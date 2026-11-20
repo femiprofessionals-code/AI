@@ -47,15 +47,34 @@ type Config = {
 const cfg: Config = { narrationVolume: 1, sfxVolume: 0.8, musicVolume: 0.8, name: '', useParentNameClip: true, recordings: {} };
 export function configureAudio(c: Partial<Config>) {
   Object.assign(cfg, c);
-  if (musicPlayer) musicPlayer.volume = cfg.musicVolume;
+  try { if (musicPlayer) musicPlayer.volume = cfg.musicVolume; } catch {}
 }
 
 let generation = 0;
-let narrator: AudioPlayer | null = null;
-let musicPlayer: AudioPlayer | null = null;
-const sfxPlayers: Partial<Record<SfxName, AudioPlayer>> = {};
 let ttsVoice: string | undefined;
 let ready = false;
+
+// Only three players exist for the whole app (voice, effects, music) and they
+// are reused with replace(). Cheap tablets have very few audio decoders, so
+// creating a player per clip makes sound stop working after a few taps.
+let voicePlayer: AudioPlayer | null = null;
+let sfxPlayer: AudioPlayer | null = null;
+let musicPlayer: AudioPlayer | null = null;
+let voiceListener: ((s: any) => void) | null = null;
+let musicListener: ((s: any) => void) | null = null;
+let voiceFailures = 0; // after repeated clip failures, use the tablet's voice directly
+
+function getVoicePlayer() {
+  if (!voicePlayer) {
+    voicePlayer = createAudioPlayer(null, { updateInterval: 100 } as any);
+    voicePlayer.addListener('playbackStatusUpdate', (st) => voiceListener?.(st));
+  }
+  return voicePlayer;
+}
+function resetVoicePlayer() {
+  try { voicePlayer?.pause(); voicePlayer?.remove(); } catch {}
+  voicePlayer = null;
+}
 
 export async function initAudio() {
   if (ready) return;
@@ -71,35 +90,40 @@ export async function initAudio() {
   } catch {}
 }
 
-function playSource(source: number | string, volume: number, gen: number): Promise<void> {
+// Plays one clip on the shared voice player. Resolves true when it played,
+// false when it could not start (the caller then uses text-to-speech).
+function playSource(source: number | string, volume: number, gen: number): Promise<boolean> {
   return new Promise((resolve) => {
-    if (gen !== generation) return resolve();
-    const p = createAudioPlayer(source as any);
-    narrator = p;
-    p.volume = volume;
+    if (gen !== generation) return resolve(true);
+    let p: AudioPlayer;
+    try { p = getVoicePlayer(); } catch { return resolve(false); }
     let done = false;
-    const finish = () => {
+    let started = false;
+    const finish = (ok: boolean) => {
       if (done) return;
       done = true;
       clearTimeout(guard);
-      sub.remove();
-      try { p.remove(); } catch {}
-      if (narrator === p) narrator = null;
-      resolve();
+      voiceListener = null;
+      if (!ok) { voiceFailures++; resetVoicePlayer(); } else if (started) voiceFailures = 0;
+      resolve(ok);
     };
-    // Safety nets so a lesson can never freeze on a clip: give up if it has
-    // not started after 4 s, and never wait longer than its length + 1.5 s.
-    let guard = setTimeout(finish, 4000);
-    let started = false;
-    const sub = p.addListener('playbackStatusUpdate', (s) => {
-      if (s.didJustFinish || gen !== generation) return finish();
-      if (!started && (s.playing || s.currentTime > 0) && s.duration > 0) {
+    // If the clip has not started after 2.5 s it failed: fall back to speech.
+    let guard = setTimeout(() => finish(started), 2500);
+    voiceListener = (st) => {
+      if (gen !== generation) return finish(true);
+      if (started && st.didJustFinish) return finish(true);
+      if (!started && (st.playing || st.currentTime > 0)) {
         started = true;
         clearTimeout(guard);
-        guard = setTimeout(finish, (s.duration - s.currentTime + 1.5) * 1000);
+        const left = st.duration > 0 ? st.duration - st.currentTime : 15;
+        guard = setTimeout(() => finish(true), (left + 1.5) * 1000);
       }
-    });
-    try { p.play(); } catch { finish(); }
+    };
+    try {
+      p.volume = volume;
+      p.replace(source as any);
+      p.play();
+    } catch { finish(false); }
   });
 }
 
@@ -108,7 +132,9 @@ function speakTts(text: string, gen: number): Promise<void> {
     if (gen !== generation || !text) return resolve();
     const guard = setTimeout(resolve, 15000);
     const done = () => { clearTimeout(guard); resolve(); };
-    Speech.speak(text, { voice: ttsVoice, language: ttsVoice ? undefined : 'en-GB', rate: 0.85, pitch: 1.05, volume: cfg.narrationVolume, onDone: done, onStopped: done, onError: done });
+    try {
+      Speech.speak(text, { voice: ttsVoice, language: ttsVoice ? undefined : 'en-GB', rate: 0.85, pitch: 1.05, volume: cfg.narrationVolume, onDone: done, onStopped: done, onError: done });
+    } catch { done(); }
   });
 }
 
@@ -117,14 +143,19 @@ export function hasClip(text: string) {
 }
 
 async function speakSegment(seg: string, gen: number) {
+  const tts = seg === '{name}' ? cfg.name || 'friend' : seg;
+  const tryClip = async (src: number | string) => {
+    if (voiceFailures >= 3) return speakTts(tts, gen); // clips keep failing on this device
+    if (!(await playSource(src, cfg.narrationVolume, gen)) && gen === generation) await speakTts(tts, gen);
+  };
   if (seg === '{name}') {
-    if (cfg.recordings['{name}']) return playSource(cfg.recordings['{name}'], cfg.narrationVolume, gen);
-    if (cfg.useParentNameClip && STARTER.nameClip && cfg.name === STARTER.childName) return playSource(STARTER.nameClip, cfg.narrationVolume, gen);
-    return speakTts(cfg.name || 'friend', gen);
+    if (cfg.recordings['{name}']) return tryClip(cfg.recordings['{name}']);
+    if (cfg.useParentNameClip && STARTER.nameClip && cfg.name === STARTER.childName) return tryClip(STARTER.nameClip);
+    return speakTts(tts, gen);
   }
   const key = lineKey(seg);
-  if (cfg.recordings[key]) return playSource(cfg.recordings[key], cfg.narrationVolume, gen);
-  if (VOICE[key]) return playSource(VOICE[key], cfg.narrationVolume, gen);
+  if (cfg.recordings[key]) return tryClip(cfg.recordings[key]);
+  if (VOICE[key]) return tryClip(VOICE[key]);
   console.warn('[voice] no clip for:', seg);
   return speakTts(seg, gen);
 }
@@ -149,45 +180,41 @@ export async function say(lines: string | string[], opts: { interrupt?: boolean 
 
 export function stopSpeech() {
   generation++;
-  if (narrator) {
-    try { narrator.pause(); narrator.remove(); } catch {}
-    narrator = null;
-  }
+  voiceListener = null;
+  try { voicePlayer?.pause(); } catch {}
   Speech.stop().catch(() => {});
   cfg.onCaption?.(null);
 }
 
 export function sfx(name: SfxName) {
   try {
-    let p = sfxPlayers[name];
-    if (!p) {
-      p = createAudioPlayer(SFX[name]);
-      sfxPlayers[name] = p;
-    }
-    p.volume = cfg.sfxVolume;
-    p.seekTo(0).catch(() => {});
-    p.play();
+    if (!sfxPlayer) sfxPlayer = createAudioPlayer(null);
+    sfxPlayer.volume = cfg.sfxVolume;
+    sfxPlayer.replace(SFX[name]);
+    sfxPlayer.play();
   } catch {}
 }
 
 export function playMusic(source: number | string, onStatus?: (t: number, done: boolean) => void): () => void {
-  stopMusic();
-  const p = createAudioPlayer(source as any, { updateInterval: 200 } as any);
-  musicPlayer = p;
-  p.volume = cfg.musicVolume;
-  const sub = p.addListener('playbackStatusUpdate', (s) => onStatus?.(s.currentTime, s.didJustFinish));
-  p.play();
-  return () => {
-    sub.remove();
-    if (musicPlayer === p) stopMusic();
-  };
+  try {
+    if (!musicPlayer) {
+      musicPlayer = createAudioPlayer(null, { updateInterval: 200 } as any);
+      musicPlayer.addListener('playbackStatusUpdate', (st) => musicListener?.(st));
+    }
+    const me = (st: any) => onStatus?.(st.currentTime, st.didJustFinish);
+    musicListener = me;
+    musicPlayer.volume = cfg.musicVolume;
+    musicPlayer.replace(source as any);
+    musicPlayer.play();
+    return () => { if (musicListener === me) stopMusic(); };
+  } catch {
+    return () => {};
+  }
 }
 
 export function stopMusic() {
-  if (musicPlayer) {
-    try { musicPlayer.pause(); musicPlayer.remove(); } catch {}
-    musicPlayer = null;
-  }
+  musicListener = null;
+  try { musicPlayer?.pause(); } catch {}
 }
 
 export function stopAll() {
@@ -196,7 +223,7 @@ export function stopAll() {
 }
 
 /** Play a file (a parent recording preview). */
-export function playFile(uri: string) {
+export async function playFile(uri: string) {
   stopSpeech();
-  return playSource(uri, cfg.narrationVolume, generation);
+  await playSource(uri, cfg.narrationVolume, generation);
 }
