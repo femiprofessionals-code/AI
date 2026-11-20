@@ -164,6 +164,16 @@ const check = (name, ok, detail = '') => { results.push(`${ok ? 'PASS' : 'FAIL'}
   check('stars are added to her jar', (await page.evaluate(() => globalThis.__app.getState().stars)) > starsBefore);
   await page.screenshot({ path: `${out}/celebration.png` });
 
+  // 8c. Listen and Learn: fact cards, then a quick check after every two facts.
+  await nav({ name: 'lesson', lesson: 'L1', stage: 2 });
+  check('the first fact card is spoken', await waitSaid('This is your head.'));
+  await page.getByText('Next', { exact: true }).first().click();
+  check('Next moves to the second fact', await waitSaid('These are your eyes.'));
+  await page.getByText('Next', { exact: true }).first().click();
+  check('a quick check follows two facts', await waitSaid('Tap the eyes!'));
+  await page.getByText('👀').first().click();
+  check('tapping the right picture is praised', await waitSaid('!', 8000) && (await said()).some((c) => /Wow|Wonderful|Excellent|Yes|Brilliant|Hooray|Super|did it|Fantastic|Great|Clever|correct/.test(c)));
+
   // 9. Parent PIN: create, confirm, enter; a wrong PIN is refused.
   await nav({ name: 'parentGate' });
   await page.waitForTimeout(600);

@@ -78,7 +78,7 @@ function NextButton({ onPress, ready = true, label = 'Next' }: { onPress: () => 
   return (
     <View style={{ alignItems: 'flex-end', paddingRight: 8 }}>
       <Pulse active={ready}>
-        <BigButton label={label} art="sparkle" color={ready ? colors.leaf : colors.white} onPress={onPress} />
+        <BigButton label={label} art="next" color={ready ? colors.leaf : colors.white} onPress={onPress} />
       </Pulse>
     </View>
   );
@@ -160,12 +160,12 @@ function Learn({ lessonId, onNext }: { lessonId: string; onNext: () => void }) {
       </View>
       <View style={{ position: 'absolute', right: 8, bottom: 40 }}>
         <Pulse active={done}>
-          <BigButton label={last ? 'Explore!' : 'Next'} art="sparkle" color={done ? colors.leaf : colors.white} onPress={next} />
+          <BigButton label={last ? 'Explore!' : 'Next'} art={last ? 'sparkle' : 'next'} color={done ? colors.leaf : colors.white} onPress={next} />
         </Pulse>
       </View>
       {i > 0 && (
         <View style={{ position: 'absolute', left: 8, bottom: 40 }}>
-          <BigButton label="Back" art="sparkle" small color={colors.white} onPress={() => { stopAll(); setI(i - 1); }} />
+          <BigButton label="Back" art="back" small color={colors.white} onPress={() => { stopAll(); setI(i - 1); }} />
         </View>
       )}
     </View>

@@ -137,6 +137,8 @@ export const items: Record<string, ItemDef> = {
   globe: { name: 'worlds', emoji: '🗺️' },
   sparkle: { name: 'sparkles', emoji: '✨' },
   camera: { name: 'a photo', emoji: '📷' },
+  next: { name: 'next', emoji: '➡️' },
+  back: { name: 'back', emoji: '⬅️' },
 };
 
 export function itemName(id: string): string {
