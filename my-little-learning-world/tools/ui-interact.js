@@ -13,7 +13,17 @@ const check = (name, ok, detail = '') => { results.push(`${ok ? 'PASS' : 'FAIL'}
 (async () => {
   fs.mkdirSync(out, { recursive: true });
   const browser = await chromium.launch({ args: ['--autoplay-policy=no-user-gesture-required'] });
-  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  const TOUCH = process.env.TOUCH === '1';
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, hasTouch: TOUCH, isMobile: false,
+    userAgent: TOUCH ? 'Mozilla/5.0 (Linux; Android 16; KC67Lite Build/BP2A; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/124.0.6367.219 Safari/537.36' : undefined });
+  const page = await ctx.newPage();
+  const cdp = TOUCH ? await ctx.newCDPSession(page) : null;
+  // In touch mode every click becomes a finger tap.
+  if (TOUCH) {
+    const L = Object.getPrototypeOf(page.locator('body'));
+    L.click = async function () { await this.tap(); };
+    const M = page.mouse; M.click = async (x, y) => { await page.touchscreen.tap(x, y); };
+  }
   const logs = [];
   const captions = [];
   page.on('console', (m) => { if (m.type() === 'error' || m.type() === 'warning') logs.push(`${m.type()}: ${m.text().slice(0, 200)}`); });
@@ -42,6 +52,13 @@ const check = (name, ok, detail = '') => { results.push(`${ok ? 'PASS' : 'FAIL'}
   const center = async (loc) => { const b = await loc.boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; };
   const drag = async (from, to) => {
     const a = await center(from), b = await center(to);
+    if (TOUCH) {
+      const pt = (x, y) => [{ x, y, id: 1, radiusX: 8, radiusY: 8, force: 1 }];
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: pt(a.x, a.y) });
+      for (let i = 1; i <= 12; i++) { await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: pt(a.x + ((b.x - a.x) * i) / 12, a.y + ((b.y - a.y) * i) / 12) }); await page.waitForTimeout(25); }
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      return;
+    }
     await page.mouse.move(a.x, a.y); await page.mouse.down();
     for (let i = 1; i <= 12; i++) { await page.mouse.move(a.x + ((b.x - a.x) * i) / 12, a.y + ((b.y - a.y) * i) / 12); await page.waitForTimeout(20); }
     await page.mouse.up();
